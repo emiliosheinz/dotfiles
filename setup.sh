@@ -25,3 +25,6 @@ brew install --cask visual-studio-code
 
 # Install Fig
 brew install fig
+
+# Install GitHub CLI
+brew install gh
