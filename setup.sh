@@ -18,7 +18,8 @@ nvm alias default node
 
 # Install oh-my-zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-brew install spaceship
+git clone https://github.com/spaceship-prompt/spaceship-prompt.git "$ZSH_CUSTOM/themes/spaceship-prompt" --depth=1
+ln -s "$ZSH_CUSTOM/themes/spaceship-prompt/spaceship.zsh-theme" "$ZSH_CUSTOM/themes/spaceship.zsh-theme"
 
 # Install VSCode
 brew install --cask visual-studio-code
@@ -28,3 +29,7 @@ brew install fig
 
 # Install GitHub CLI
 brew install gh
+
+# Install Fira Code
+brew tap homebrew/cask-fonts
+brew install --cask font-fira-code
