@@ -1,0 +1,18 @@
+[user]
+	name = Emilio Heinzmann
+	email = emiliosheinz@gmail.com
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[core]
+	askpass = git-gui--askpass
+	editor = code --wait
+[credential]
+	username = emiliosheinz
+	helper = osxkeychain
+[credentials]
+	helper = osxkeychain
+[pull]
+	rebase = false
