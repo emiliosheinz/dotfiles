@@ -1,5 +1,5 @@
 [user]
-	name = Emilio Heinzmann
+	name = Emilio Schaedler Heinzmann
 	email = emiliosheinz@gmail.com
 [filter "lfs"]
 	clean = git-lfs clean -- %f
@@ -11,8 +11,6 @@
 	editor = code --wait
 [credential]
 	username = emiliosheinz
-	helper = osxkeychain
-[credentials]
 	helper = osxkeychain
 [pull]
 	rebase = false
