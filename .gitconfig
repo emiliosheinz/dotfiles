@@ -1,5 +1,5 @@
 [user]
-	name = Emilio Schaedler Heinzmann
+	name = Emilio Heinzmann
 	email = emiliosheinz@gmail.com
 [filter "lfs"]
 	clean = git-lfs clean -- %f
