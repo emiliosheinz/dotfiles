@@ -1,11 +1,11 @@
-# Install Brew
-# Docs: https://brew.sh/index_pt-br
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-echo '# Set PATH, MANPATH, etc., for Homebrew.' >> $HOME/.zprofile
-echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> $HOME/.zprofile
-eval "$(/opt/homebrew/bin/brew shellenv)"
+# Install MacOS development tools
+xcode-select --install
 
-# # Install nvm
+# Install Homebrew
+# Docs: https://brew.sh
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install nvm
 brew install nvm 
 mkdir $HOME/.nvm
 export NVM_DIR=$HOME/.nvm;
@@ -17,9 +17,7 @@ nvm use --lts
 nvm alias default node
 
 # Install oh-my-zsh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-git clone https://github.com/spaceship-prompt/spaceship-prompt.git "$ZSH_CUSTOM/themes/spaceship-prompt" --depth=1
-ln -s "$ZSH_CUSTOM/themes/spaceship-prompt/spaceship.zsh-theme" "$ZSH_CUSTOM/themes/spaceship.zsh-theme"
+sh -c "$(curl -fsSL https://install.ohmyz.sh/)"
 
 # Install GitHub CLI
 brew install gh
