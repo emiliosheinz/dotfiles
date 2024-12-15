@@ -1,15 +1,24 @@
 [user]
 	name = Emilio Heinzmann
 	email = emiliosheinz@gmail.com
+	signingkey = D9A0A443ABD2CDCA
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
 [core]
-	editor = nvim
+	editor = nvim 
 [credential]
 	username = emiliosheinz
 	helper = osxkeychain
+[pull]
+	rebase = false
+[commit]
+	gpgsign = true
+[tag]
+	gpgsign = true
+[gpg]
+	program = /opt/homebrew/bin/gpg
 [init]
 	defaultBranch = main
