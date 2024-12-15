@@ -7,10 +7,9 @@
 	process = git-lfs filter-process
 	required = true
 [core]
-	askpass = git-gui--askpass
-	editor = code --wait
+	editor = nvim
 [credential]
 	username = emiliosheinz
 	helper = osxkeychain
-[pull]
-	rebase = false
+[init]
+	defaultBranch = main
