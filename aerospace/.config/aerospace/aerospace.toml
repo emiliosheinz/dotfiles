@@ -1,0 +1,124 @@
+# Start AeroSpace at login
+start-at-login = false 
+
+# Normalizations. See: https://nikitabobko.github.io/AeroSpace/guide#normalization
+enable-normalization-flatten-containers = true 
+enable-normalization-opposite-orientation-for-nested-containers = true 
+
+# See: https://nikitabobko.github.io/AeroSpace/guide#layouts
+# The 'accordion-padding' specifies the size of accordion padding
+# You can set 0 to disable the padding feature
+accordion-padding = 16
+
+# Possible values: tiles|accordion
+default-root-container-layout = 'accordion'
+
+# Possible values: horizontal|vertical|auto
+# 'auto' means: wide monitor (anything wider than high) gets horizontal orientation,
+#               tall monitor (anything higher than wide) gets vertical orientation
+default-root-container-orientation = 'auto'
+
+# Possible values: (qwerty|dvorak)
+# See https://nikitabobko.github.io/AeroSpace/guide#key-mapping
+key-mapping.preset = 'qwerty'
+
+# Mouse follows focus when focused monitor changes
+# Drop it from your config, if you don't like this behavior
+# See https://nikitabobko.github.io/AeroSpace/guide#on-focus-changed-callbacks
+# See https://nikitabobko.github.io/AeroSpace/commands#move-mouse
+on-focus-changed = ['move-mouse window-lazy-center']
+on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+
+# Gaps between windows (inner-*) and between monitor edges (outer-*).
+# Possible values:
+# - Constant:     gaps.outer.top = 8
+# - Per monitor:  gaps.outer.top = [{ monitor.main = 16 }, { monitor."some-pattern" = 32 }, 24]
+#                 In this example, 24 is a default value when there is no match.
+#                 Monitor pattern is the same as for 'workspace-to-monitor-force-assignment'.
+#                 See: https://nikitabobko.github.io/AeroSpace/guide#assign-workspaces-to-monitors
+[gaps]
+inner.horizontal = 8
+inner.vertical =   8
+outer.left =       8
+outer.bottom =     8
+outer.top =        8
+outer.right =      8
+
+# Each monitor has 3 workspaces 
+[workspace-to-monitor-force-assignment]
+1 = 1      
+2 = 1      
+3 = 1     
+4 = 2      
+5 = 2      
+6 = 2      
+7 = 3      
+8 = 3      
+9 = 3      
+
+# [[on-window-detected]]
+# if.app-id = 'com.timpler.screenstudio'
+# check-further-callbacks = false 
+# run = 'layout floating'
+
+# 'main' binding mode declaration
+# See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
+# 'main' binding mode must be always presented
+[mode.main.binding]
+cmd-h = [] # Disable "hide application"
+cmd-alt-h = [] # Disable "hide others"
+
+# Change focus between windows
+# See: https://nikitabobko.github.io/AeroSpace/commands#focus
+alt-h = 'focus left --boundaries all-monitors-outer-frame --boundaries-action stop'
+alt-j = 'focus down --boundaries all-monitors-outer-frame --boundaries-action stop'
+alt-k = 'focus up --boundaries all-monitors-outer-frame --boundaries-action stop'
+alt-l = 'focus right --boundaries all-monitors-outer-frame --boundaries-action stop'
+
+# Move windows around
+# See: https://nikitabobko.github.io/AeroSpace/commands#move
+alt-ctrl-h = 'move left'
+alt-ctrl-j = 'move down'
+alt-ctrl-k = 'move up'
+alt-ctrl-l = 'move right'
+
+# Focus monitors 
+alt-u = 'focus-monitor 1'
+alt-i = 'focus-monitor 2'
+alt-o = 'focus-monitor 3'
+
+# Move windows to specific monitor
+alt-ctrl-u = ['move-node-to-monitor 1', 'focus-monitor 1']
+alt-ctrl-i = ['move-node-to-monitor 2', 'focus-monitor 2']
+alt-ctrl-o = ['move-node-to-monitor 3', 'focus-monitor 3']
+
+# Cycle between workspaces
+alt-left = 'workspace prev'
+alt-right = 'workspace next'
+
+# Move windows between workspaces
+alt-ctrl-left = ['move-node-to-workspace prev', 'workspace prev']
+alt-ctrl-right = ['move-node-to-workspace next', 'workspace next']
+
+#Other usefull commands
+alt-minus = 'resize smart -50'
+alt-equal = 'resize smart +50'
+alt-e = 'balance-sizes'
+alt-m = 'fullscreen'
+alt-slash = 'layout horizontal vertical'
+alt-period = 'layout tiles accordion'
+
+# Change between modes
+alt-semicolon = 'mode service'
+
+# Service mode binding
+[mode.service.binding]
+esc = ['reload-config', 'mode main']
+r = ['flatten-workspace-tree', 'mode main'] # reset layout
+f = ['layout floating tiling', 'mode main'] # Toggle between floating and tiling layout
+backspace = ['close-all-windows-but-current', 'mode main']
+alt-h = ['join-with left', 'mode main']
+alt-j = ['join-with down', 'mode main']
+alt-k = ['join-with up', 'mode main']
+alt-l = ['join-with right', 'mode main']
+

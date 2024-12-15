@@ -1,0 +1,94 @@
+# change window focus within space
+# alt - j : if [ "$(yabai -m query --spaces --space | jq -r '.type')" = "stack" ]; then yabai -m window --focus stack.prev; else yabai -m window --focus south; fi
+# alt - k : if [ "$(yabai -m query --spaces --space | jq -r '.type')" = "stack" ]; then yabai -m window --focus stack.next; else yabai -m window --focus north; fi
+alt - j : yabai -m window --focus south
+alt - k : yabai -m window --focus north
+alt - h : yabai -m window --focus west
+alt - l : yabai -m window --focus east
+
+# warp windows
+ctrl + alt - j : yabai -m window --warp south
+ctrl + alt - k : yabai -m window --warp north
+ctrl + alt - h : yabai -m window --warp west
+ctrl + alt - l : yabai -m window --warp east
+
+# swap windows
+alt + shift - j : yabai -m window --swap south
+alt + shift - k : yabai -m window --swap north
+alt + shift - h : yabai -m window --swap west
+alt + shift - l : yabai -m window --swap east
+
+# change focus between external displays 
+alt - u: yabai -m display --focus 3
+alt - i: yabai -m display --focus 1
+alt - o: yabai -m display --focus 2
+
+# move window to display left and right
+ctrl + alt - u : yabai -m window --display 3; yabai -m display --focus 3;
+ctrl + alt - i : yabai -m window --display 1; yabai -m display --focus 1;
+ctrl + alt - o : yabai -m window --display 2; yabai -m display --focus 2;
+
+# move window to prev and next space without wrapping around
+# https://github.com/koekeishiya/yabai/issues/1291
+# move to the next space within current display
+ctrl + alt - right : \
+  cur_window=$(yabai -m query --windows --window | jq '.id') && \
+  current_space=$(yabai -m query --spaces --space | jq '.index') && \
+  current_display_last_space_index=$(yabai -m query --spaces --display | jq 'sort_by(.index) | last | .index') && \
+  if [ "$current_space" -lt "$current_display_last_space_index" ]; then \
+    next_space=$((current_space + 1)) && \
+    yabai -m window --space "${next_space}"; \
+  fi
+# move to the previous space within current display
+ctrl + alt - left : \
+  cur_window=$(yabai -m query --windows --window | jq '.id') && \
+  current_space=$(yabai -m query --spaces --space | jq '.index') && \
+  current_display_first_space_index=$(yabai -m query --spaces --display | jq 'sort_by(.index) | first | .index') && \
+  if [ "$current_space" -gt "" ]; then \
+    prev_space=$((current_space - 1)) && \
+    yabai -m window --space "${prev_space}"; \
+  fi
+
+# Move window to a specific space
+ctrl + alt - 1 : yabai -m window --space 1
+ctrl + alt - 2 : yabai -m window --space 2
+ctrl + alt - 3 : yabai -m window --space 3
+ctrl + alt - 4 : yabai -m window --space 4
+ctrl + alt - 5 : yabai -m window --space 5
+ctrl + alt - 6 : yabai -m window --space 6
+ctrl + alt - 7 : yabai -m window --space 7
+ctrl + alt - 8 : yabai -m window --space 8
+ctrl + alt - 9 : yabai -m window --space 9
+
+# rotate layout clockwise
+alt - r : yabai -m space --rotate 270
+
+# flip along y-axis
+alt - y : yabai -m space --mirror y-axis
+
+# flip along x-axis
+alt - x : yabai -m space --mirror x-axis
+
+# toggle window float
+alt - t : yabai -m window --toggle float --grid 10:10:1:1:8:8
+
+# make floating window full screen 
+alt - f : yabai -m window --grid 1:1:0:0:1:1
+
+# toggle window split type
+alt - space : yabai -m window --toggle split
+
+# toggle space layout
+# alt - 0x2F : space_index=$(yabai -m query --spaces | jq '.[] | select(.["has-focus"] == true) | .index') && yabai -m space "${space_index}" --layout stack 
+# alt - 0x2C : space_index=$(yabai -m query --spaces | jq '.[] | select(.["has-focus"] == true) | .index') && yabai -m space "${space_index}" --layout bsp 
+
+# maximize a window
+alt - m : yabai -m window --toggle zoom-fullscreen
+
+# balance out tree of windows (resize to occupy same area)
+alt - e : yabai -m space --balance
+
+# stop/start/restart yabai
+ctrl + alt - q : yabai --stop-service
+ctrl + alt - s : yabai --start-service
+ctrl + alt - r : yabai --restar-service

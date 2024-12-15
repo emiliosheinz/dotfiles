@@ -145,6 +145,5 @@ export NVM_DIR="$HOME/.nvm"
 
 export GPG_TTY=$(tty)
 
-# TODO: this needs to be improved, I'm not sure where to place my own scripts
-export PATH="$HOME/bin:$PATH"
+export PATH="$HOME/.local/scripts:$PATH"
 
