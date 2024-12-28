@@ -1,3 +1,6 @@
+#!/bin/bash
+set -e
+
 # MacOS
 xcode-select --install 
 
