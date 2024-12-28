@@ -54,5 +54,4 @@ brew install --cask aldente
 brew install --cask rectangle
 
 # Fonts 
-brew tap homebrew/cask-fonts
 brew install --cask font-fira-code-nerd-font
