@@ -1,27 +1,53 @@
-# Install MacOS development tools
-xcode-select --install
+# MacOS
+xcode-select --install 
 
-# Install Homebrew
-# Docs: https://brew.sh
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+# Homebrew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 
 
-# Install nvm
+# Stow
+brew install stow 
+
+# Utilities
+brew install fzf
+stow bin
+stow git
+
+# iTerm2
+brew install --cask iterm2 
+stow itemr2 
+
+# ZSH
+sh -c "$(curl -fsSL https://install.ohmyz.sh/)" 
+stow zsh 
+
+# nvim
+brew install neovim
+stow nvim
+
+# tmux
+brew install tmux
+stow tmux
+
+# Node
 brew install nvm 
-mkdir $HOME/.nvm
-export NVM_DIR=$HOME/.nvm;
-source $NVM_DIR/nvm.sh;
+mkdir $HOME/.nvm 
 
-# Install node
-nvm install --lts
-nvm use --lts
-nvm alias default node
+nvm install --lts 
+nvm use --lts 
+nvm alias default node 
 
-# Install oh-my-zsh
-sh -c "$(curl -fsSL https://install.ohmyz.sh/)"
-
-# Install GitHub CLI
+# GitHub
 brew install gh
 
-# Install Fira Code
+# Apps
+brew install --cask 1password
+brew install --cask google-chrome
+brew install --cask spotify
+brew install --cask raycast
+brew install --cask docker
+brew install --cask aldente
+brew install --cask rectangle
+
+# Fonts 
 brew tap homebrew/cask-fonts
-brew install --cask font-fira-code
+brew install --cask font-fira-code-nerd-font
