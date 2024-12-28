@@ -1,39 +1,54 @@
 #!/bin/bash
 set -e
-set -x
 
 # MacOS
+echo "📦 Installing MacOS XCode Command Line Tools"
 xcode-select --install 
 
+echo "Complete the installation of Xcode Command Line Tools before proceeding"
+echo "Press enter to continue"
+read
+
 # Homebrew
+echo "📦 Installing Homebrew"
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 
-export PATH=/opt/homebrew/bin:$PATH
+eval "$(/opt/homebrew/bin/brew shellenv)"
 
 # Stow
+echo "📦 Installing Stow"
 brew install stow 
 
-# Utilities
-brew install fzf
-stow bin
+# Create config symlinks
+echo "📦 Creating config symlinks"
 stow git
-
-# iTerm2
-brew install --cask iterm2 
-stow itemr2 
-
-# ZSH
-sh -c "$(curl -fsSL https://install.ohmyz.sh/)" 
+stow bin
 stow zsh 
-
-# nvim
-brew install neovim
+stow iterm2 
 stow nvim
-
-# tmux
-brew install tmux
 stow tmux
 
+# Utilities
+echo "📦 Installing Utilities"
+brew install fzf
+
+# iTerm2
+echo "📦 Installing iTerm2"
+brew install --cask iterm2 
+
+# ZSH
+echo "📦 Installing ZSH"
+sh -c "$(curl -fsSL https://install.ohmyz.sh/)" "" --unattended
+
+# nvim
+echo "📦 Installing Neovim"
+brew install neovim
+
+# tmux
+echo "📦 Installing Tmux"
+brew install tmux
+
 # Node
+echo "📦 Installing Node"
 brew install nvm 
 mkdir $HOME/.nvm 
 
@@ -45,6 +60,7 @@ nvm alias default node
 brew install gh
 
 # Apps
+echo "📦 Installing Apps"
 brew install --cask 1password
 brew install --cask google-chrome
 brew install --cask spotify
@@ -54,4 +70,5 @@ brew install --cask aldente
 brew install --cask rectangle
 
 # Fonts 
+echo "📦 Installing Fonts"
 brew install --cask font-fira-code-nerd-font
