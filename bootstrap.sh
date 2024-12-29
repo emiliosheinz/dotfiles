@@ -38,6 +38,7 @@ brew install neovim
 # tmux
 echo "📦 Installing Tmux"
 brew install tmux
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 
 # Node
 echo "📦 Installing Node"
