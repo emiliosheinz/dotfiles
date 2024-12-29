@@ -1,14 +1,6 @@
 #!/bin/bash
 set -e
 
-# MacOS
-echo "📦 Installing MacOS XCode Command Line Tools"
-xcode-select --install 
-
-echo "Complete the installation of Xcode Command Line Tools before proceeding"
-echo "Press enter to continue"
-read
-
 # Homebrew
 echo "📦 Installing Homebrew"
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 
