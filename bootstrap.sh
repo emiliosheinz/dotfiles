@@ -45,6 +45,8 @@ echo "📦 Installing Node"
 brew install nvm 
 mkdir $HOME/.nvm 
 
+source $(brew --prefix nvm)/nvm.sh
+
 nvm install --lts 
 nvm use --lts 
 nvm alias default node 
