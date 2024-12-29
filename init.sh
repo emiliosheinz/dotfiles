@@ -9,7 +9,7 @@ echo "Complete the installation of Xcode Command Line Tools before proceeding"
 echo "Press enter to continue"
 read
 
-git clone --recurse-submodules git@github.com:emiliosheinz/dotfiles.git $HOME/dotfiles
+git clone --recurse-submodules https://github.com/emiliosheinz/dotfiles.git $HOME/dotfiles
 
 echo ""
 echo "Dotfiles repository cloned to $HOME/dotfiles"
