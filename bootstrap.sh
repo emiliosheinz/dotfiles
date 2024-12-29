@@ -28,8 +28,8 @@ echo "📦 Installing iTerm2"
 brew install --cask iterm2 
 
 # ZSH
-echo "📦 Installing ZSH"
-sh -c "$(curl -fsSL https://install.ohmyz.sh/)" "" --unattended
+echo "📦 Installing Oh My Zsh"
+sh -c "$(curl -fsSL https://install.ohmyz.sh/)" "" --unattended --keep-zshrc
 
 # nvim
 echo "📦 Installing Neovim"
