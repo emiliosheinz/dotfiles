@@ -22,6 +22,7 @@ stow tmux
 # Utilities
 echo "📦 Installing Utilities"
 brew install fzf
+brew install lazygit
 
 # iTerm2
 echo "📦 Installing iTerm2"
@@ -50,9 +51,6 @@ source $(brew --prefix nvm)/nvm.sh
 nvm install --lts 
 nvm use --lts 
 nvm alias default node 
-
-# GitHub
-brew install gh
 
 # Apps
 echo "📦 Installing Apps"
