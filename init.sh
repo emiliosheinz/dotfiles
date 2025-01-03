@@ -51,5 +51,8 @@ git clone --recurse-submodules git@github.com:emiliosheinz/dotfiles.git $HOME/do
 
 echo ""
 echo "Dotfiles repository cloned to $HOME/dotfiles"
-echo "Please, execute the following commands to continue the installation:"
-echo "cd $HOME/dotfiles && ./bootstrap.sh"
+echo "The following command was copied to your clipboard. Paste it in your terminal to continue:"
+echo ""
+command="cd $HOME/dotfiles && ./install.sh"
+echo $command | pbcopy
+echo $command

@@ -1,7 +1,6 @@
 [user]
 	name = Emilio Heinzmann
 	email = emiliosheinz@gmail.com
-	signingkey = D9A0A443ABD2CDCA
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f

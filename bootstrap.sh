@@ -23,6 +23,8 @@ stow tmux
 echo "📦 Installing Utilities"
 brew install fzf
 brew install lazygit
+brew install gnupg
+brew install ripgrep
 
 # iTerm2
 echo "📦 Installing iTerm2"
@@ -65,3 +67,27 @@ brew install --cask rectangle
 # Fonts 
 echo "📦 Installing Fonts"
 brew install --cask font-fira-code-nerd-font
+
+# Setup GPG keys
+echo "🔑 Setting up GPG keys"
+echo "Read more about the setup here: https://docs.github.com/pt/authentication/managing-commit-signature-verification/generating-a-new-gpg-key"
+gpg --full-generate-key
+gpg --list-secret-keys --keyid-format=long
+echo "Copy the key ID and paste it here:"
+read key_id
+gpg --armor --export $key_id | pbcopy
+echo "📋 GPG key copied to clipboard, paste it in GitHub"
+open https://github.com/settings/gpg/new
+
+# Missing configs
+# Scroll direction
+# Set desktop background
+# Signin to 1Password
+# Signin to google chrome
+# Signin to spotify
+# Signin to raycast
+# Signin to docker
+# Set up rectangle shortcuts
+# Set up al dente
+# Set up gpg keys
+# Modularize everything so that it can be run in parts
