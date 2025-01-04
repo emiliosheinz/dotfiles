@@ -79,8 +79,24 @@ gpg --armor --export $key_id | pbcopy
 echo "📋 GPG key copied to clipboard, paste it in GitHub"
 open https://github.com/settings/gpg/new
 
-# Missing configs
-# Scroll direction
+# Gesture and keyboard settings
+echo "🔧 Disabling natural scroll direction"
+defaults write -g com.apple.swipescrolldirection -boolean NO 
+echo "🔧 Setting trackpad and mouse scaling"
+defaults write -g com.apple.trackpad.scaling 2
+defaults write -g com.apple.mouse.scaling 1
+echo "🔧 Setting key repeat and delay for improved nvim experience"
+defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
+defaults write NSGlobalDomain KeyRepeat -int 2
+defaults write NSGlobalDomain InitialKeyRepeat -int 15
+
+defaults write com.apple.dock autohide -int 1
+defaults write com.apple.dock autohide-time-modifier -int 1
+defaults write com.apple.dock tilesize -int 35
+defaults write com.apple.dock show-recents -int 0
+defaults write com.apple.dock largesize 35
+killall Dock
+
 # Set desktop background
 # Signin to 1Password
 # Signin to google chrome
