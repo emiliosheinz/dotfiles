@@ -138,9 +138,11 @@ wait_for_confirmation
 
 echo "🚀 Setup Raycast and press enter when done"
 echo "1. Go to Settings > Keyboard > Keyboard Shortcuts > Spotlight and turn off 'Show Spotlight search'"
-echo "2. Login to your account"
-echo "3. Check 'Launch Raycast at login'"
-echo "4. Change 'Raycast Hotkey' to ⌘ + Space"
+echo "1. Change 'Raycast Hotkey' to ⌘ + Space"
+echo "2. Check 'Open at login'"
+echo "3. Check 'Use Raycast Emoji Picker'"
+echo "4. Grant access to Files and Folders"
+echo "5. Login to your account"
 open -a "Raycast"
 wait_for_confirmation
 
@@ -157,11 +159,17 @@ wait_for_confirmation
 echo "🍝 Setting up AlDente"
 echo "1. Enable 'Launch at login'"
 echo "2. Change limit to 75%"
-open -a "Al Dente"
+open -a "AlDente"
 wait_for_confirmation
 
+# TODO this is not acurate, we need to export import things rather than loading from custom location
 echo "💻 Setting up iTerm"
 echo "1. Go to Settings > settings and check 'Load preferences from a custom folder or URL'"
 echo "2. Set the folder to ~/config/iterm2/settings"
 echo "3. Set Save changes to 'Automatically'" 
+open -a "iTerm"
 wait_for_confirmation
+
+# TODO: Tmux needs initializtion instructions
+# TODO: nvim failes to build one package, understand why
+# TODO: Unwanted files are still apearing in the git changes
