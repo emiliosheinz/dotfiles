@@ -89,21 +89,48 @@ echo "🔧 Setting key repeat and delay for improved nvim experience"
 defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
 defaults write NSGlobalDomain KeyRepeat -int 2
 defaults write NSGlobalDomain InitialKeyRepeat -int 15
-
+echo "🔧 Setting dock preferences"
 defaults write com.apple.dock autohide -int 1
 defaults write com.apple.dock autohide-time-modifier -int 1
-defaults write com.apple.dock tilesize -int 35
+defaults write com.apple.dock tilesize -int 40
 defaults write com.apple.dock show-recents -int 0
 defaults write com.apple.dock largesize 35
 killall Dock
 
-# Set desktop background
-# Signin to 1Password
-# Signin to google chrome
-# Signin to spotify
-# Signin to raycast
-# Signin to docker
-# Set up rectangle shortcuts
-# Set up al dente
-# Set up gpg keys
-# Modularize everything so that it can be run in parts
+# Desktop background
+echo "🔧 Setting desktop background to black"
+osascript -e 'tell application "System Events" to set picture of every desktop to "/System/Library/Desktop Pictures/Solid Colors/Black.png"'
+
+# TODO add more instructions on how to setup each application
+# - All dente configuration
+# - Rectangle configuration
+# - Raycast configuration
+# etc
+echo "🔑 Setup 1Password and press enter when done"
+open -a "1Password"
+read
+
+echo "🌐 Setup Google Chrome and press enter when done"
+open -a "Google Chrome"
+read
+
+echo "🎵 Setup Spotify and press enter when done"
+open -a "Spotify"
+read
+
+echo "🚀 Setup Raycast and press enter when done"
+open -a "Raycast"
+read
+
+echo "🐳 Setup Docker and press enter when done"
+open -a "Docker"
+read
+
+# TODO add rectangle configuration file and instructions to import them
+echo "🔧 Setting up Rectangle shortcuts"
+open -a "Rectangle"
+read
+
+echo "🍝 Setting up Al Dente"
+open -a "Al Dente"
+read
