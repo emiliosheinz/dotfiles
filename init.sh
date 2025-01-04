@@ -53,6 +53,6 @@ echo ""
 echo "Dotfiles repository cloned to $HOME/dotfiles"
 echo "The following command was copied to your clipboard. Paste it in your terminal to continue:"
 echo ""
-command="cd $HOME/dotfiles && ./install.sh"
+command="cd $HOME/dotfiles && ./bootstrap.sh"
 echo $command | pbcopy
 echo $command
