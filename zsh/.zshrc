@@ -13,7 +13,8 @@ export FZF_DEFAULT_OPTS=" \
 --color=fg:#cdd6f4,header:#f38ba8,info:#cba6f7,pointer:#f5e0dc \
 --color=marker:#b4befe,fg+:#cdd6f4,prompt:#cba6f7,hl+:#f38ba8 \
 --color=selected-bg:#45475a \
---multi"
+--multi \
+--height=100%"
 
 # Set list of themes to pick from when loading at random
 # Setting this variable when ZSH_THEME=random will cause zsh to load
@@ -137,6 +138,16 @@ source <(fzf --zsh)
 
 # Keybindings
 bindkey -s ^f "tmux-sessionizer\n"
+
+export FZF_CTRL_R_OPTS="
+  --bind 'ctrl-y:execute-silent(echo -n {2..} | pbcopy)+abort'
+  --color header:italic
+  --header 'Press CTRL-Y to copy command into clipboard'
+  --reverse"
+
+export FZF_CTRL_T_OPTS="
+  --walker-skip .git,node_modules,target
+  --layout reverse"
 
 export GPG_TTY=$(tty)
 
