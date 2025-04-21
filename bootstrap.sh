@@ -24,7 +24,6 @@ wait_for_confirmation
 stow git
 stow bin
 stow zsh 
-stow iterm2 
 stow nvim
 stow tmux
 
@@ -162,11 +161,10 @@ echo "2. Change limit to 75%"
 open -a "AlDente"
 wait_for_confirmation
 
-# TODO this is not acurate, we need to export import things rather than loading from custom location
 echo "💻 Setting up iTerm"
-echo "1. Go to Settings > settings and check 'Load preferences from a custom folder or URL'"
-echo "2. Set the folder to ~/config/iterm2/settings"
-echo "3. Set Save changes to 'Automatically'" 
+echo "1. Go to Settings > General > Settings"
+echo "2. Click Import All Settings and Data"
+echo "3. Import the settings and data from ~/dotfiles/iterm2/config.itermexport" 
 open -a "iTerm"
 wait_for_confirmation
 
