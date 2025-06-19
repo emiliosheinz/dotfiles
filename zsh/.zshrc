@@ -1,6 +1,9 @@
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
+# Load secrets if available
+[ -f ~/.secrets ] && source ~/.secrets
+
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
 # to know which specific one was loaded, run: echo $RANDOM_THEME
@@ -150,6 +153,7 @@ export FZF_CTRL_T_OPTS="
   --layout reverse"
 
 export GPG_TTY=$(tty)
+gpg-connect-agent updatestartuptty /bye > /dev/null
 
 export PATH="$HOME/.local/scripts:$PATH"
 
