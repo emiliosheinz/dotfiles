@@ -34,6 +34,7 @@ brew install fzf
 brew install lazygit
 brew install gnupg
 brew install ripgrep
+brew install jq
 
 # iTerm2
 echo "📦 Installing iTerm2"
@@ -68,6 +69,25 @@ nvm install --lts
 nvm use --lts 
 nvm alias default node 
 
+# Docker
+echo "📦 Installing Docker"
+brew install docker
+brew install docker-compose
+brew install docker-credential-helper
+brew install docker-buildxrew
+brew install qemu
+brew install colima
+brew install jesseduffield/lazydocker/lazydocker
+
+./ensure-docker-plugins-work.sh
+
+colima start --cpu 4 --memory 8 --disk 100 --vz-rosetta --mount-type virtiofs --ssh-agent --network-address
+brew services start colima
+
+# Some applications (such as AWS SAM) try to attach directly to the 
+# Docker socket at /var/run/docker.sock, we can symlink the socket in there:
+sudo ln -sf ~/.colima/default/docker.sock /var/run/docker.sock
+
 # Apps
 echo "📦 Installing Apps"
 wait_for_confirmation
@@ -75,7 +95,6 @@ brew install --cask 1password
 brew install --cask google-chrome
 brew install --cask spotify
 brew install --cask raycast
-brew install --cask docker
 brew install --cask aldente
 brew install --cask rectangle
 
