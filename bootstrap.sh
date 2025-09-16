@@ -74,7 +74,7 @@ echo "📦 Installing Docker"
 brew install docker
 brew install docker-compose
 brew install docker-credential-helper
-brew install docker-buildxrew
+brew install docker-buildx
 brew install qemu
 brew install colima
 brew install jesseduffield/lazydocker/lazydocker
