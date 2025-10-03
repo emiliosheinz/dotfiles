@@ -3,6 +3,8 @@ export ZSH="$HOME/.oh-my-zsh"
 
 # Load secrets if available
 [ -f ~/.secrets ] && source ~/.secrets
+# Load environment variables if available
+[ -f ~/.env ] && source ~/.env
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,

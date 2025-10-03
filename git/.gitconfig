@@ -13,11 +13,5 @@
 	helper = osxkeychain
 [pull]
 	rebase = false
-[commit]
-	gpgsign = true
-[tag]
-	gpgsign = true
-[gpg]
-	program = /opt/homebrew/bin/gpg
 [init]
 	defaultBranch = main

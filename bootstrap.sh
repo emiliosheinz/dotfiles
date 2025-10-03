@@ -71,22 +71,32 @@ nvm alias default node
 
 # Docker
 echo "📦 Installing Docker"
-brew install docker
-brew install docker-compose
-brew install docker-credential-helper
-brew install docker-buildx
-brew install qemu
-brew install colima
+
+brew install --cask docker
 brew install jesseduffield/lazydocker/lazydocker
 
-./ensure-docker-plugins-work.sh
-
-colima start --cpu 4 --memory 8 --disk 100 --vz-rosetta --mount-type virtiofs --ssh-agent --network-address
-brew services start colima
-
-# Some applications (such as AWS SAM) try to attach directly to the 
-# Docker socket at /var/run/docker.sock, we can symlink the socket in there:
-sudo ln -sf ~/.colima/default/docker.sock /var/run/docker.sock
+# Colima installation
+# brew install docker
+# brew install docker-compose
+# brew install docker-credential-helper
+# brew install docker-buildx
+# brew install qemu
+# brew install colima
+# brew install jesseduffield/lazydocker/lazydocker
+#
+# ./ensure-docker-plugins-work.sh
+#
+# colima start \
+#   --cpu 4 --memory 8 --disk 100 \
+#   --vm-type vz --vz-rosetta \
+#   --mount-type virtiofs \
+#   --mount-inotify \
+#   --ssh-agent --network-address
+# brew services start colima
+#
+# # Some applications (such as AWS SAM) try to attach directly to the 
+# # Docker socket at /var/run/docker.sock, we can symlink the socket in there:
+# sudo ln -sf ~/.colima/default/docker.sock /var/run/docker.sock
 
 # Apps
 echo "📦 Installing Apps"
