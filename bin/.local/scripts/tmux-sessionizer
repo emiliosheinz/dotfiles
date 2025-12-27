@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 
+directories=(
+    ~/Documents/git/emiliosheinz
+    ~/Documents/git/youtube
+    ~/Documents/git/public
+    ~/Documents/git/cloudbeds
+)
+
 if [[ $# -eq 1 ]]; then
     selected=$1
 else
-    selected=$(find ~/Documents/git/emiliosheinz ~/Documents/git/public ~/Documents/git/cloudbeds -mindepth 1 -maxdepth 1 -type d | fzf)
+    selected=$(find "${directories[@]}" -mindepth 1 -maxdepth 1 -type d | fzf)
 fi
 
 if [[ -z $selected ]]; then
