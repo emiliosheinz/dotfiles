@@ -26,6 +26,7 @@ stow bin
 stow zsh 
 stow nvim
 stow tmux
+stow opencode
 
 # Utilities
 echo "📦 Installing Utilities"
@@ -35,6 +36,7 @@ brew install lazygit
 brew install gnupg
 brew install ripgrep
 brew install jq
+brew install anomalyco/tap/opencode
 
 # iTerm2
 echo "📦 Installing iTerm2"
