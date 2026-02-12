@@ -71,32 +71,8 @@ nvm alias default node
 
 # Docker
 echo "📦 Installing Docker"
-
 brew install --cask docker
 brew install jesseduffield/lazydocker/lazydocker
-
-# Colima installation
-# brew install docker
-# brew install docker-compose
-# brew install docker-credential-helper
-# brew install docker-buildx
-# brew install qemu
-# brew install colima
-# brew install jesseduffield/lazydocker/lazydocker
-#
-# ./ensure-docker-plugins-work.sh
-#
-# colima start \
-#   --cpu 4 --memory 8 --disk 100 \
-#   --vm-type vz --vz-rosetta \
-#   --mount-type virtiofs \
-#   --mount-inotify \
-#   --ssh-agent --network-address
-# brew services start colima
-#
-# # Some applications (such as AWS SAM) try to attach directly to the 
-# # Docker socket at /var/run/docker.sock, we can symlink the socket in there:
-# sudo ln -sf ~/.colima/default/docker.sock /var/run/docker.sock
 
 # Apps
 echo "📦 Installing Apps"
@@ -112,18 +88,6 @@ brew install --cask rectangle
 echo "📦 Installing Fonts"
 wait_for_confirmation
 brew install --cask font-fira-code-nerd-font
-
-# Setup GPG keys
-echo "🔑 Setting up GPG keys"
-wait_for_confirmation
-echo "Read more about the setup here: https://docs.github.com/pt/authentication/managing-commit-signature-verification/generating-a-new-gpg-key"
-gpg --full-generate-key
-gpg --list-secret-keys --keyid-format=long
-echo "Copy the key ID and paste it here:"
-read key_id
-gpg --armor --export $key_id | pbcopy
-echo "📋 GPG key copied to clipboard, paste it in GitHub"
-open https://github.com/settings/gpg/new
 
 # Gesture and keyboard settings
 echo "🔧 Disabling natural scroll direction"
