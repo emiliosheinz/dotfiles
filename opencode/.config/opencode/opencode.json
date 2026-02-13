@@ -1,4 +1,38 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "theme": "catppuccin"
+  "theme": "catppuccin",
+  "model": "github-copilot/claude-sonnet-4.5",
+  "small_model": "github-copilot/claude-haiku-4.5",
+  "provider": {
+    "github-copilot": {
+      "options": {
+        "timeout": 600000,
+        "setCacheKey": true
+      }
+    }
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "*": "ask",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git show*": "allow",
+      "git branch*": "allow",
+      "git push --force*": "deny",
+      "git push -f*": "deny",
+      "rm -rf*": "deny",
+      "rm -fr*": "deny",
+      "ls*": "allow",
+      "cat*": "allow",
+      "pwd": "allow",
+      "echo*": "allow"
+    },
+  },
+  "tui": {
+    "scroll_acceleration": {
+      "enabled": true
+    }
+  }
 }
