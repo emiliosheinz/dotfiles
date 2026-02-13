@@ -14,21 +14,22 @@
   "permission": {
     "edit": "allow",
     "bash": {
-      "*": "ask",
-      "git status*": "allow",
-      "git diff*": "allow",
-      "git log*": "allow",
-      "git show*": "allow",
-      "git branch*": "allow",
+      "*": "allow",
       "git push --force*": "deny",
       "git push -f*": "deny",
-      "rm -rf*": "deny",
-      "rm -fr*": "deny",
-      "ls*": "allow",
-      "cat*": "allow",
-      "pwd": "allow",
-      "echo*": "allow"
-    },
+      "git push origin main --force*": "deny",
+      "git push origin master --force*": "deny",
+      "rm -rf /*": "deny",
+      "rm -rf ~/*": "deny",
+      "rm -rf .*": "deny",
+      "rm -fr /*": "deny",
+      "rm -fr ~/*": "deny",
+      "rm -fr .*": "deny",
+      "sudo rm -rf*": "deny",
+      "sudo rm -fr*": "deny",
+      "chmod -R 777*": "deny",
+      "dd if=*": "deny"
+    }
   },
   "tui": {
     "scroll_acceleration": {
