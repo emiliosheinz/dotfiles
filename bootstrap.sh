@@ -58,6 +58,7 @@ echo "📦 Installing Tmux"
 wait_for_confirmation
 brew install tmux
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+~/.tmux/plugins/tpm/bin/install_plugins
 
 # Node
 echo "📦 Installing Node"
