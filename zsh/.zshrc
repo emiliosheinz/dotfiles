@@ -153,8 +153,5 @@ export FZF_CTRL_T_OPTS="
   --walker-skip .git,node_modules,target
   --layout reverse"
 
-export GPG_TTY=$(tty)
-gpg-connect-agent updatestartuptty /bye > /dev/null
-
 export PATH="$HOME/.local/scripts:$PATH"
 
