@@ -27,6 +27,7 @@ stow zsh
 stow nvim
 stow tmux
 stow opencode
+stow karabiner
 
 # Utilities
 echo "📦 Installing Utilities"
@@ -86,6 +87,7 @@ brew install --cask spotify
 brew install --cask raycast
 brew install --cask aldente
 brew install --cask rectangle
+brew install --cask karabiner-elements
 
 # Fonts 
 echo "📦 Installing Fonts"
@@ -164,6 +166,8 @@ echo "3. Import the settings and data from ~/dotfiles/iterm2/config.itermexport"
 open -a "iTerm"
 wait_for_confirmation
 
-# TODO: Tmux needs initializtion instructions
-# TODO: nvim failes to build one package, understand why
-# TODO: Unwanted files are still apearing in the git changes
+echo "⌨️  Setting up Karabiner-Elements"
+echo "1. Grant necessary permissions when prompted"
+echo "2. Configuration is already symlinked"
+open -a "Karabiner-Elements"
+wait_for_confirmation
