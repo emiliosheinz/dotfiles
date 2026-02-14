@@ -163,6 +163,9 @@
     "screenEdgeGapsOnMainScreenOnly" : {
       "bool" : false
     },
+    "screensOrderedByX" : {
+      "int" : 0
+    },
     "selectedCycleSizes" : {
       "int" : 0
     },
@@ -232,6 +235,9 @@
     "unsnapRestore" : {
       "int" : 0
     },
+    "widthStepSize" : {
+      "float" : 30
+    },
     "windowSnapping" : {
       "int" : 2
     }
@@ -262,7 +268,7 @@
       "modifierFlags" : 786432
     },
     "maximize" : {
-      "keyCode" : 51,
+      "keyCode" : 36,
       "modifierFlags" : 786432
     },
     "nextDisplay" : {
@@ -306,5 +312,5 @@
       "modifierFlags" : 786432
     }
   },
-  "version" : "91"
+  "version" : "99"
 }
