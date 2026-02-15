@@ -74,6 +74,11 @@ nvm install --lts
 nvm use --lts 
 nvm alias default node 
 
+# pnpm
+echo "📦 Installing pnpm"
+wait_for_confirmation
+brew install pnpm
+
 # Rosetta (required for Docker on Apple Silicon)
 if [[ $(uname -m) == "arm64" ]]; then
   echo "📦 Installing Rosetta 2 (required for Docker)"
