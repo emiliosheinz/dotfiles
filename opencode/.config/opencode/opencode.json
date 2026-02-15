@@ -43,7 +43,15 @@
         "npx",
         "@playwright/mcp@latest"
       ],
-      "enabled": true
+      "enabled": false
+    },
+    "github": {
+      "type": "local",
+      "command": [
+        "npx",
+        "@modelcontextprotocol/server-github"
+      ],
+      "enabled": false
     }
   }
 }
