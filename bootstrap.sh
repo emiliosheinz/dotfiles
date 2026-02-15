@@ -88,6 +88,7 @@ brew install --cask raycast
 brew install --cask aldente
 brew install --cask rectangle
 brew install --cask karabiner-elements
+brew install --cask displaylink
 
 # Fonts 
 echo "📦 Installing Fonts"
