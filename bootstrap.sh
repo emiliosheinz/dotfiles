@@ -73,8 +73,16 @@ nvm install --lts
 nvm use --lts 
 nvm alias default node 
 
+# Rosetta (required for Docker on Apple Silicon)
+if [[ $(uname -m) == "arm64" ]]; then
+  echo "📦 Installing Rosetta 2 (required for Docker)"
+  wait_for_confirmation
+  softwareupdate --install-rosetta --agree-to-license
+fi
+
 # Docker
 echo "📦 Installing Docker"
+wait_for_confirmation
 brew install --cask docker
 brew install jesseduffield/lazydocker/lazydocker
 
