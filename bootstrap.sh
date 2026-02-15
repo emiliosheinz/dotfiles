@@ -37,6 +37,7 @@ brew install lazygit
 brew install gnupg
 brew install ripgrep
 brew install jq
+brew install gh
 brew install anomalyco/tap/opencode
 
 # iTerm2
@@ -179,4 +180,9 @@ echo "⌨️  Setting up Karabiner-Elements"
 echo "1. Grant necessary permissions when prompted"
 echo "2. Configuration is already symlinked"
 open -a "Karabiner-Elements"
+wait_for_confirmation
+
+echo "🔧 Setting up GitHub CLI"
+echo "1. Running 'gh auth login' to authenticate"
+echo "2. Follow the prompts to authenticate with GitHub"
 wait_for_confirmation
