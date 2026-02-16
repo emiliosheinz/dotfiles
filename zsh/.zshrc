@@ -142,7 +142,7 @@ source <(fzf --zsh)
 
 # Set up zoxide (smarter cd)
 if command -v zoxide &> /dev/null; then
-  eval "$(zoxide init zsh)"
+  eval "$(zoxide init zsh --cmd cd)"
 fi
 
 # Load custom aliases
