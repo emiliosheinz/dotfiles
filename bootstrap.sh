@@ -34,7 +34,6 @@ echo "📦 Installing Utilities"
 wait_for_confirmation
 brew install fzf
 brew install lazygit
-brew install gnupg
 brew install ripgrep
 brew install jq
 brew install gh
