@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+
+osascript -e 'tell application "System Settings" to quit'
+sudo -v
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
+###############################################################################
+# General UI/UX
+###############################################################################
+
+echo "🔧 Setting General UI/UX preferences..."
+
+defaults write -g com.apple.swipescrolldirection -boolean NO
+defaults write -g com.apple.trackpad.scaling 2
+defaults write -g com.apple.mouse.scaling 1
+defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
+defaults write NSGlobalDomain KeyRepeat -int 2
+defaults write NSGlobalDomain InitialKeyRepeat -int 15
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
+defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode2 -bool true
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true
+defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
+defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false
+
+###############################################################################
+# Dock
+###############################################################################
+
+echo "🔧 Setting Dock preferences..."
+
+defaults write com.apple.dock autohide -int 1
+defaults write com.apple.dock autohide-time-modifier -int 1
+defaults write com.apple.dock autohide-delay -float 0
+defaults write com.apple.dock tilesize -int 40
+defaults write com.apple.dock largesize -int 35
+defaults write com.apple.dock show-recents -int 0
+
+# Magnification size
+defaults write com.apple.dock largesize -int 35
+
+defaults write com.apple.dock show-process-indicators -bool true
+defaults write com.apple.dock launchanim -bool false
+defaults write com.apple.dock expose-animation-duration -float 0.1
+
+###############################################################################
+# Finder
+###############################################################################
+
+echo "🔧 Setting Finder preferences..."
+
+defaults write com.apple.finder AppleShowAllFiles -bool true
+defaults write NSGlobalDomain AppleShowAllExtensions -bool true
+defaults write com.apple.finder ShowStatusBar -bool true
+defaults write com.apple.finder ShowPathbar -bool true
+defaults write com.apple.finder _FXSortFoldersFirst -bool true
+defaults write com.apple.finder FXDefaultSearchScope -string "SCcf"
+defaults write com.apple.finder FXEnableExtensionChangeWarning -bool false
+defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv"
+defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
+defaults write com.apple.desktopservices DSDontWriteUSBStores -bool true
+
+###############################################################################
+# Desktop
+###############################################################################
+
+echo "🔧 Setting Desktop preferences..."
+
+osascript -e 'tell application "System Events" to set picture of every desktop to "/System/Library/Desktop Pictures/Solid Colors/Black.png"'
+
+###############################################################################
+# Keyboard & Input
+###############################################################################
+
+echo "🔧 Setting Keyboard preferences..."
+
+defaults write NSGlobalDomain NSAutomaticSpellingCorrectionEnabled -bool false
+defaults write NSGlobalDomain NSAutomaticCapitalizationEnabled -bool false
+defaults write NSGlobalDomain NSAutomaticDashSubstitutionEnabled -bool false
+defaults write NSGlobalDomain NSAutomaticQuoteSubstitutionEnabled -bool false
+defaults write NSGlobalDomain NSAutomaticPeriodSubstitutionEnabled -bool false
+
+###############################################################################
+# Screenshots
+###############################################################################
+
+echo "🔧 Setting Screenshot preferences..."
+
+mkdir -p "${HOME}/Pictures/Screenshots"
+defaults write com.apple.screencapture location -string "${HOME}/Pictures/Screenshots"
+defaults write com.apple.screencapture type -string "png"
+defaults write com.apple.screencapture disable-shadow -bool true
+
+###############################################################################
+# Terminal
+###############################################################################
+
+echo "🔧 Setting Terminal preferences..."
+
+defaults write com.apple.terminal StringEncodings -array 4
+defaults write com.apple.terminal SecureKeyboardEntry -bool true
+
+###############################################################################
+# Activity Monitor
+###############################################################################
+
+echo "🔧 Setting Activity Monitor preferences..."
+
+defaults write com.apple.ActivityMonitor OpenMainWindow -bool true
+defaults write com.apple.ActivityMonitor ShowCategory -int 0
+defaults write com.apple.ActivityMonitor SortColumn -string "CPUUsage"
+defaults write com.apple.ActivityMonitor SortDirection -int 0
+
+###############################################################################
+# Software Updates
+###############################################################################
+
+echo "🔧 Setting Software Update preferences..."
+
+defaults write com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true
+defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
+defaults write com.apple.SoftwareUpdate AutomaticDownload -int 1
+defaults write com.apple.SoftwareUpdate CriticalUpdateInstall -int 1
+
+###############################################################################
+# Restart affected applications
+###############################################################################
+
+echo "🔧 Restarting affected applications..."
+
+for app in "Activity Monitor" \
+	"Dock" \
+	"Finder" \
+	"SystemUIServer"; do
+	killall "${app}" &> /dev/null
+done
+
+echo "✅ Done! Some changes may require a logout/restart to take effect."

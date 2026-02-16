@@ -140,6 +140,14 @@ zinit light zdharma/fast-syntax-highlighting
 # Set up fzf key bindings and fuzzy completion
 source <(fzf --zsh)
 
+# Set up zoxide (smarter cd)
+if command -v zoxide &> /dev/null; then
+  eval "$(zoxide init zsh)"
+fi
+
+# Load custom aliases
+[ -f ~/.aliases.zsh ] && source ~/.aliases.zsh
+
 # Keybindings
 bindkey -s ^f "tmux-sessionizer\n"
 

@@ -28,16 +28,52 @@ stow nvim
 stow tmux
 stow opencode
 stow karabiner
+stow btop
+stow macos
 
 # Utilities
 echo "📦 Installing Utilities"
 wait_for_confirmation
 brew install fzf
 brew install lazygit
+brew install gnupg
 brew install ripgrep
 brew install jq
 brew install gh
 brew install anomalyco/tap/opencode
+
+# Modern CLI replacements
+echo "📦 Installing Modern CLI Tools"
+wait_for_confirmation
+brew install eza
+brew install bat
+brew install zoxide
+brew install btop
+
+echo "🎨 Configuring bat theme"
+if command -v bat &> /dev/null; then
+  mkdir -p "$(bat --config-dir)/themes"
+  if curl -fsSL https://github.com/catppuccin/bat/raw/main/themes/Catppuccin%20Mocha.tmTheme -o "$(bat --config-dir)/themes/Catppuccin-mocha.tmTheme"; then
+    bat cache --build
+    echo "✅ bat theme configured"
+  else
+    echo "⚠️  Failed to download bat theme, using default"
+  fi
+else
+  echo "⚠️  bat not found, skipping theme configuration"
+fi
+
+echo "🎨 Configuring btop theme"
+if command -v btop &> /dev/null; then
+  mkdir -p ~/.config/btop/themes
+  if curl -fsSL https://github.com/catppuccin/btop/raw/main/themes/catppuccin_mocha.theme -o ~/.config/btop/themes/catppuccin_mocha.theme; then
+    echo "✅ btop theme configured"
+  else
+    echo "⚠️  Failed to download btop theme, using default"
+  fi
+else
+  echo "⚠️  btop not found, skipping theme configuration"
+fi
 
 # iTerm2
 echo "📦 Installing iTerm2"
@@ -108,32 +144,15 @@ echo "📦 Installing Fonts"
 wait_for_confirmation
 brew install --cask font-fira-code-nerd-font
 
-# Gesture and keyboard settings
-echo "🔧 Disabling natural scroll direction"
+# Apply macOS system defaults
+echo "🔧 Applying macOS system defaults"
 wait_for_confirmation
-defaults write -g com.apple.swipescrolldirection -boolean NO 
-echo "🔧 Setting trackpad and mouse scaling"
-wait_for_confirmation
-defaults write -g com.apple.trackpad.scaling 2
-defaults write -g com.apple.mouse.scaling 1
-echo "🔧 Setting key repeat and delay for improved nvim experience"
-wait_for_confirmation
-defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
-defaults write NSGlobalDomain KeyRepeat -int 2
-defaults write NSGlobalDomain InitialKeyRepeat -int 15
-echo "🔧 Setting dock preferences"
-wait_for_confirmation
-defaults write com.apple.dock autohide -int 1
-defaults write com.apple.dock autohide-time-modifier -int 1
-defaults write com.apple.dock tilesize -int 40
-defaults write com.apple.dock show-recents -int 0
-defaults write com.apple.dock largesize 35
-killall Dock
-
-# Desktop background
-echo "🔧 Setting desktop background to black"
-wait_for_confirmation
-osascript -e 'tell application "System Events" to set picture of every desktop to "/System/Library/Desktop Pictures/Solid Colors/Black.png"'
+if [ -f ~/.macos ]; then
+  chmod +x ~/.macos
+  ~/.macos
+else
+  echo "⚠️  .macos script not found, skipping system defaults"
+fi
 
 echo "🔑 Setup 1Password and press enter when done"
 open -a "1Password"
