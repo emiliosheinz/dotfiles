@@ -138,6 +138,7 @@ brew install --cask aldente
 brew install --cask rectangle
 brew install --cask karabiner-elements
 brew install --cask displaylink
+brew install --cask shottr
 
 # Fonts 
 echo "📦 Installing Fonts"
@@ -203,6 +204,13 @@ echo "⌨️  Setting up Karabiner-Elements"
 echo "1. Grant necessary permissions when prompted"
 echo "2. Configuration is already symlinked"
 open -a "Karabiner-Elements"
+wait_for_confirmation
+
+echo "📸 Setting up Shottr"
+echo "1. Grant necessary permissions when prompted"
+echo "2. Enable 'Launch at login'"
+echo "3. Set Screenshots folder as /Users/emiliosheinz/Pictures/Screenshots"
+open -a "Shottr"
 wait_for_confirmation
 
 echo "🔧 Setting up GitHub CLI"
