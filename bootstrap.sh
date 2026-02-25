@@ -22,7 +22,7 @@ brew install stow
 echo "📦 Creating config symlinks"
 wait_for_confirmation
 stow git
-stow bin
+stow scripts
 stow zsh 
 stow nvim
 stow tmux
