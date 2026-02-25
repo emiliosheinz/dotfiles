@@ -5,6 +5,7 @@ directories=(
     ~/Documents/git/youtube
     ~/Documents/git/public
     ~/Documents/git/cloudbeds
+    ~/Documents/git/spoke
 )
 
 if [[ $# -eq 1 ]]; then
