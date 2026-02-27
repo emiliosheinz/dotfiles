@@ -7,11 +7,19 @@ wait_for_confirmation ()
   read -n 1
 }
 
-# Homebrew
-echo "📦 Installing Homebrew"
-wait_for_confirmation
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 
-eval "$(/opt/homebrew/bin/brew shellenv)"
+BREW_PREFIX="${BREW_PREFIX:-$HOME/.homebrew}"
+
+setup_homebrew() {
+  if command -v brew &> /dev/null; then
+    echo "✅ Homebrew already installed at $(brew --prefix)"
+  else
+    echo "📦 Installing Homebrew to $BREW_PREFIX"
+    git clone https://github.com/Homebrew/brew "$BREW_PREFIX"
+  fi
+  eval "$("$BREW_PREFIX/bin/brew" shellenv)"
+}
+
+setup_homebrew
 
 # Stow
 echo "📦 Installing Stow"
@@ -100,10 +108,16 @@ git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 # Node
 echo "📦 Installing Node"
 wait_for_confirmation
-brew install nvm 
-mkdir $HOME/.nvm 
+# Install nvm standalone 
+export NVM_DIR="$HOME/.nvm"
+if [ ! -d "$NVM_DIR" ]; then
+  mkdir -p "$NVM_DIR"
+  NVM_VERSION=$(curl -s https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+  curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | bash
+fi
 
-source $(brew --prefix nvm)/nvm.sh
+# Load nvm
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
 nvm install --lts 
 nvm use --lts 
@@ -209,7 +223,7 @@ wait_for_confirmation
 echo "📸 Setting up Shottr"
 echo "1. Grant necessary permissions when prompted"
 echo "2. Enable 'Launch at login'"
-echo "3. Set Screenshots folder as /Users/emiliosheinz/Pictures/Screenshots"
+echo "3. Set Screenshots folder as $HOME/Pictures/Screenshots"
 open -a "Shottr"
 wait_for_confirmation
 
