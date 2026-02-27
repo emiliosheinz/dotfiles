@@ -1,6 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "theme": "catppuccin",
   "model": "github-copilot/claude-sonnet-4.5",
   "small_model": "github-copilot/claude-haiku-4.5",
   "provider": {
@@ -29,11 +28,6 @@
       "sudo rm -fr*": "deny",
       "chmod -R 777*": "deny",
       "dd if=*": "deny"
-    }
-  },
-  "tui": {
-    "scroll_acceleration": {
-      "enabled": true
     }
   },
   "mcp": {
