@@ -260,7 +260,7 @@
       "modifierFlags" : 786432
     },
     "larger" : {
-      "keyCode" : 27,
+      "keyCode" : 24,
       "modifierFlags" : 786432
     },
     "leftHalf" : {
@@ -292,7 +292,7 @@
       "modifierFlags" : 786432
     },
     "smaller" : {
-      "keyCode" : 24,
+      "keyCode" : 27,
       "modifierFlags" : 786432
     },
     "toggleTodo" : {
