@@ -1,3 +1,5 @@
-export HISTFILESIZE=100002
+export HISTFILESIZE=100000
 export HISTSIZE=100000
 export _ZO_DOCTOR=0
+export VOLTA_HOME="$HOME/.volta"
+export PATH="$VOLTA_HOME/bin:$PATH"
