@@ -60,6 +60,10 @@ brew install bat
 brew install zoxide
 brew install btop
 
+# Other CLI tools
+echo "📦 Installing Other CLI Tools"
+brew install --cask gcloud-cli
+
 echo "🎨 Configuring bat theme"
 if command -v bat &> /dev/null; then
   mkdir -p "$(bat --config-dir)/themes"
@@ -110,25 +114,9 @@ git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 # Node
 echo "📦 Installing Node"
 wait_for_confirmation
-# Install nvm standalone 
-export NVM_DIR="$HOME/.nvm"
-if [ ! -d "$NVM_DIR" ]; then
-  mkdir -p "$NVM_DIR"
-  NVM_VERSION=$(curl -s https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
-  curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | bash
-fi
-
-# Load nvm
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-nvm install --lts 
-nvm use --lts 
-nvm alias default node 
-
-# pnpm
-echo "📦 Installing pnpm"
-wait_for_confirmation
-brew install pnpm
+curl https://get.volta.sh | bash
+volta install node
+volta install corepack
 
 # Rosetta (required for Docker on Apple Silicon)
 if [[ $(uname -m) == "arm64" ]]; then
@@ -155,6 +143,8 @@ brew install --cask rectangle
 brew install --cask karabiner-elements
 brew install --cask displaylink
 brew install --cask shottr
+brew install --cask twist
+brew install --cask roam
 
 # Fonts 
 echo "📦 Installing Fonts"
@@ -229,7 +219,31 @@ echo "3. Set Screenshots folder as $HOME/Pictures/Screenshots"
 open -a "Shottr"
 wait_for_confirmation
 
+echo "💬 Setting up Twist"
+echo "1. Login to your account"
+echo "2. Enable 'Launch at login'"
+open -a "Twist"
+wait_for_confirmation
+
+echo "🏢 Setting up Roam"
+echo "1. Login to your account"
+open -a "Roam"
+wait_for_confirmation
+
 echo "🔧 Setting up GitHub CLI"
-echo "1. Running 'gh auth login' to authenticate"
+echo "1. Run 'gh auth login' to authenticate"
 echo "2. Follow the prompts to authenticate with GitHub"
 wait_for_confirmation
+
+echo "🧶 Setting up npm"
+echo "1. Run 'yarn npm login' to authenticate"
+echo "2. Follow the prompts to authenticate with npm"
+wait_for_confirmation
+
+echo "📱 Setting up gcloud CLI"
+echo "1. Run 'gcloud auth login' to authenticate"
+echo "2. Follow the prompts to authenticate with your Google account"
+echo "3. Run 'gcloud auth configure-docker europe-west2-docker.pkg.dev --project=circuit-api-284012' to configure Docker authentication for Google Artifact Registry"
+wait_for_confirmation
+
+echo "🎉 Setup complete! Enjoy your new development environment!"
