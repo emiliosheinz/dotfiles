@@ -1,6 +1,6 @@
 [user]
 	name = Emilio Heinzmann
-	email = emiliosheinz@gmail.com
+	email = emilio@spoke.com
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
