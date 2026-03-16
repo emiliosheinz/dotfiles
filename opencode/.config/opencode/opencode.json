@@ -11,21 +11,26 @@
     }
   },
   "permission": {
-    "edit": "ask",
+    "*": "allow",
     "bash": {
-      "*": "ask",
-      "cat *": "allow",
-      "ls *": "allow",
-      "echo *": "allow",
-      "pwd": "allow",
-      "which *": "allow",
-      "grep *": "allow",
-      "rg *": "allow",
-      "find *": "allow",
-      "git status*": "allow",
-      "git log *": "allow",
-      "git diff *": "allow",
-      "git show *": "allow"
+      "*": "allow",
+      "git push*": "deny",
+      "git rebase*": "deny",
+      "git reset*": "deny",
+      "git clean*": "deny",
+      "rm -rf /": "deny",
+      "rm -rf /*": "deny",
+      "rm -rf *": "ask",
+      "mv /*": "ask",
+      "mv / *": "ask",
+      "dd *": "deny",
+      "mkfs*": "deny",
+      "fdisk *": "deny",
+      "mount *": "deny",
+      "umount *": "deny",
+      "chmod -R *": "ask",
+      "chown -R *": "ask",
+      "sudo *": "deny"
     }
   },
   "mcp": {
