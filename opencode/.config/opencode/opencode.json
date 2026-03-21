@@ -12,6 +12,7 @@
   },
   "permission": {
     "*": "allow",
+    "external_directory": "ask",
     "bash": {
       "*": "allow",
       "git push*": "deny",
