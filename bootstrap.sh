@@ -35,6 +35,7 @@ stow zsh
 stow nvim
 stow tmux
 stow opencode
+stow claude
 stow karabiner
 stow btop
 stow macos
@@ -49,6 +50,7 @@ brew install ripgrep
 brew install jq
 brew install gh
 brew install anomalyco/tap/opencode
+brew install --cask claude-code
 
 # Modern CLI replacements
 echo "📦 Installing Modern CLI Tools"
