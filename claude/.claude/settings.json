@@ -3,42 +3,5 @@
   "statusLine": {
     "type": "command",
     "command": "bash ~/.claude/statusline-command.sh"
-  },
-  "permissions": {
-    "allow": [
-      "Read",
-      "Write",
-      "Edit",
-      "Bash(*)"
-    ],
-    "ask": [
-      "Bash(git merge*)",
-      "Bash(git revert*)",
-      "Bash(mv /*)",
-      "Bash(chmod*)",
-      "Bash(chown*)",
-      "Bash(curl*)",
-      "Bash(wget*)",
-      "Bash(kill*)",
-      "Bash(pkill*)",
-      "Bash(brew install*)",
-      "Bash(brew uninstall*)",
-      "Bash(npm install -g*)",
-      "Bash(pip install*)"
-    ],
-    "deny": [
-      "Bash(git push*)",
-      "Bash(git rebase*)",
-      "Bash(git clean*)",
-      "Bash(git reset --hard*)",
-      "Bash(sudo*)",
-      "Bash(rm -rf /*)",
-      "Bash(rm -rf ~*)",
-      "Bash(dd *)",
-      "Bash(mkfs*)",
-      "Bash(fdisk*)",
-      "Bash(chmod -R /*)",
-      "Bash(chown -R /*)"
-    ]
   }
 }
