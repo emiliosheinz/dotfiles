@@ -12,7 +12,6 @@
   },
   "permission": {
     "*": "allow",
-    "external_directory": "ask",
     "bash": {
       "*": "allow",
       "git push*": "deny",
@@ -32,6 +31,13 @@
       "chmod -R *": "ask",
       "chown -R *": "ask",
       "sudo *": "deny"
+    },
+    "read": {
+      "~/.config/opencode/get-shit-done/*": "allow"
+    },
+    "external_directory": {
+      "*": "ask",
+      "~/.config/opencode/get-shit-done/*": "allow"
     }
   },
   "mcp": {

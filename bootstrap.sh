@@ -130,6 +130,11 @@ echo "📦 Installing pnpm"
 wait_for_confirmation
 brew install pnpm
 
+# Get Shit Done (GSD)
+echo "📦 Installing Get Shit Done (GSD)"
+wait_for_confirmation
+npx get-shit-done-cc@latest --opencode --claude --global
+
 # Rosetta (required for Docker on Apple Silicon)
 if [[ $(uname -m) == "arm64" ]]; then
   echo "📦 Installing Rosetta 2 (required for Docker)"

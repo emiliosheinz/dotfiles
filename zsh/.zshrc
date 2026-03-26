@@ -1,8 +1,6 @@
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
-# Load secrets if available
-[ -f ~/.secrets ] && source ~/.secrets
 # Load environment variables if available
 [ -f ~/.env ] && source ~/.env
 
