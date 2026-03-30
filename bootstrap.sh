@@ -39,6 +39,7 @@ stow claude
 stow karabiner
 stow btop
 stow macos
+stow ccstatusline
 
 # Utilities
 echo "📦 Installing Utilities"
