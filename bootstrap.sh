@@ -61,6 +61,7 @@ brew install btop
 
 # Other CLI tools
 echo "📦 Installing Other CLI Tools"
+wait_for_confirmation
 brew install --cask gcloud-cli
 
 echo "🎨 Configuring bat theme"
