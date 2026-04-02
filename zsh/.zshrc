@@ -86,6 +86,9 @@ source $ZSH/oh-my-zsh.sh
 
 # export MANPATH="/usr/local/man:$MANPATH"
 
+export PATH="$HOME/.local/scripts:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
+
 # You may need to manually set your language environment
 export LANG=en_US.UTF-8
 
@@ -158,6 +161,3 @@ export FZF_CTRL_R_OPTS="
 export FZF_CTRL_T_OPTS="
   --walker-skip .git,node_modules,target
   --layout reverse"
-
-export PATH="$HOME/.local/scripts:$PATH"
-
