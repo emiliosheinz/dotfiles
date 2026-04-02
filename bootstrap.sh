@@ -50,8 +50,6 @@ brew install gnupg
 brew install ripgrep
 brew install jq
 brew install gh
-brew install anomalyco/tap/opencode
-brew install --cask claude-code
 
 # Modern CLI replacements
 echo "📦 Installing Modern CLI Tools"
@@ -60,6 +58,12 @@ brew install eza
 brew install bat
 brew install zoxide
 brew install btop
+
+# Install AI related tools
+echo "📦 Installing AI Tools"
+wait_for_confirmation
+brew install anomalyco/tap/opencode
+curl -fsSL https://claude.ai/install.sh | bash
 
 echo "🎨 Configuring bat theme"
 if command -v bat &> /dev/null; then
@@ -130,11 +134,6 @@ nvm alias default node
 echo "📦 Installing pnpm"
 wait_for_confirmation
 brew install pnpm
-
-# Get Shit Done (GSD)
-echo "📦 Installing Get Shit Done (GSD)"
-wait_for_confirmation
-npx get-shit-done-cc@latest --opencode --claude --global
 
 # Rosetta (required for Docker on Apple Silicon)
 if [[ $(uname -m) == "arm64" ]]; then
