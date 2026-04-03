@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Returns the foreground process group leader's name for a given TTY.
+# This avoids showing transient child process names (e.g. version strings
+# set by Node.js via process.title) instead of the actual command.
+tty=$1
+pgid=$(ps -t "$tty" -o pgid=,stat= 2>/dev/null | awk '$2 ~ /\+/ { print $1; exit }')
+[ -z "$pgid" ] && exit 1
+ps -p "$pgid" -o comm= 2>/dev/null | tr -d ' '
