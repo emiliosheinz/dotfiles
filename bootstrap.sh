@@ -59,12 +59,6 @@ brew install bat
 brew install zoxide
 brew install btop
 
-# Install AI related tools
-echo "📦 Installing AI Tools"
-wait_for_confirmation
-brew install anomalyco/tap/opencode
-curl -fsSL https://claude.ai/install.sh | bash
-
 echo "🎨 Configuring bat theme"
 if command -v bat &> /dev/null; then
   mkdir -p "$(bat --config-dir)/themes"
@@ -147,6 +141,13 @@ echo "📦 Installing Docker"
 wait_for_confirmation
 brew install --cask docker
 brew install jesseduffield/lazydocker/lazydocker
+
+# Install AI related tools
+echo "📦 Installing AI Tools"
+wait_for_confirmation
+brew install anomalyco/tap/opencode
+curl -fsSL https://claude.ai/install.sh | bash
+npx get-shit-done-cc@latest --global --opencode --claude
 
 # Apps
 echo "📦 Installing Apps"

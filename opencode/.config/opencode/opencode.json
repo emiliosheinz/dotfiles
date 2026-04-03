@@ -12,7 +12,10 @@
   },
   "permission": {
     "*": "allow",
-    "external_directory": "ask",
+    "external_directory": {
+      "*": "ask",
+      "~/.config/opencode/get-shit-done/*": "allow"
+    },
     "bash": {
       "*": "allow",
       "git push*": "deny",
@@ -33,6 +36,9 @@
       "chown -R *": "ask",
       "sudo *": "deny"
     },
+    "read": {
+      "~/.config/opencode/get-shit-done/*": "allow"
+    }
   },
   "mcp": {
     "playwright": {
