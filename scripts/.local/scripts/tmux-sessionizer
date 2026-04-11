@@ -13,13 +13,23 @@ fi
 selected_name=$(basename "$selected" | tr . _)
 tmux_running=$(pgrep tmux)
 
+setup_windows() {
+    tmux send-keys -t "$selected_name:1" "nvim" Enter
+    tmux new-window -t "$selected_name" -c "$selected"
+    tmux new-window -t "$selected_name" -c "$selected"
+    tmux select-window -t "$selected_name:1"
+}
+
 if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
-    tmux new-session -s $selected_name -c $selected
+    tmux new-session -ds $selected_name -c $selected
+    setup_windows
+    tmux attach-session -t $selected_name
     exit 0
 fi
 
 if ! tmux has-session -t=$selected_name 2> /dev/null; then
     tmux new-session -ds $selected_name -c $selected
+    setup_windows
 fi
 
 if [[ -z $TMUX ]]; then
