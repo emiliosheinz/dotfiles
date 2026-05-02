@@ -10,36 +10,6 @@
       }
     }
   },
-  "permission": {
-    "*": "allow",
-    "external_directory": {
-      "*": "ask",
-      "~/.config/opencode/get-shit-done/*": "allow"
-    },
-    "bash": {
-      "*": "allow",
-      "git push*": "deny",
-      "git rebase*": "deny",
-      "git reset*": "deny",
-      "git clean*": "deny",
-      "rm -rf /": "deny",
-      "rm -rf /*": "deny",
-      "rm -rf *": "ask",
-      "mv /*": "ask",
-      "mv / *": "ask",
-      "dd *": "deny",
-      "mkfs*": "deny",
-      "fdisk *": "deny",
-      "mount *": "deny",
-      "umount *": "deny",
-      "chmod -R *": "ask",
-      "chown -R *": "ask",
-      "sudo *": "deny"
-    },
-    "read": {
-      "~/.config/opencode/get-shit-done/*": "allow"
-    }
-  },
   "mcp": {
     "playwright": {
       "type": "local",
