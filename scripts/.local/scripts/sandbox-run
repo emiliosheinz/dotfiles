@@ -1,0 +1,83 @@
+#!/usr/bin/env zsh
+# sandbox-run: launch an agent under sandbox-exec.
+# Always renders a temp policy file so SANDBOX_HOME_DIR is substituted with
+# the real HOME, making agents.sb portable across machines (personal, spoke).
+# Workdirs outside ~/dev/ and ~/dotfiles/ get ancestor literals injected too.
+#
+# Usage:
+#   sandbox-run claude [args...]
+#   sandbox-run opencode [args...]
+
+set -euo pipefail
+
+readonly HOME_DIR="${HOME}"
+readonly WORKDIR="$(pwd -P)"
+readonly PROFILE="${HOME_DIR}/dotfiles/sandbox/agents.sb"
+
+if [[ ! -f "${PROFILE}" ]]; then
+    print -u2 "sandbox-run: profile not found: ${PROFILE}"
+    exit 1
+fi
+
+case "${1:-}" in
+    claude)
+        AGENT_BIN="${HOME_DIR}/.local/bin/claude"
+        ;;
+    opencode)
+        AGENT_BIN="${HOME_DIR}/.homebrew/bin/opencode"
+        ;;
+    *)
+        print -u2 "Usage: sandbox-run <claude|opencode> [args...]"
+        exit 1
+        ;;
+esac
+shift
+
+if [[ ! -x "${AGENT_BIN}" ]]; then
+    print -u2 "sandbox-run: agent binary not found or not executable: ${AGENT_BIN}"
+    exit 1
+fi
+
+# Always render to a temp file so SANDBOX_HOME_DIR is replaced with the real HOME.
+TMPFILE="$(mktemp /tmp/sandbox-run-XXXXXX)"
+trap 'rm -f "${TMPFILE}"' EXIT INT TERM
+
+sed "s|SANDBOX_HOME_DIR|${HOME_DIR}|g" "${PROFILE}" > "${TMPFILE}"
+
+# If the workdir is not pre-baked (~/dev/ or ~/dotfiles/), append ancestor
+# literals and a R/W subpath so the agent can operate there.
+_is_covered() {
+    local dir="$1"
+    local -a covered_prefixes=(
+        "${HOME_DIR}/dev"
+        "${HOME_DIR}/dotfiles"
+    )
+    for prefix in "${covered_prefixes[@]}"; do
+        [[ "${dir}" == "${prefix}" || "${dir}" == "${prefix}/"* ]] && return 0
+    done
+    return 1
+}
+
+if ! _is_covered "${WORKDIR}"; then
+    # Reject paths that contain characters which would break or inject SBPL syntax.
+    # SBPL string literals are delimited by double-quotes; a bare quote or backslash
+    # in the path would malform the injected rule or allow rule injection.
+    if [[ "${WORKDIR}" =~ [\"\\] ]]; then
+        print -u2 "sandbox-run: workdir contains characters unsafe for sandbox policy injection: ${WORKDIR}"
+        exit 1
+    fi
+    {
+        printf '\n;; Runtime workdir: %s\n' "${WORKDIR}"
+        local ancestor=""
+        local -a parts
+        parts=("${(@s:/:)WORKDIR}")
+        for part in "${parts[@]}"; do
+            [[ -z "${part}" ]] && continue
+            ancestor="${ancestor}/${part}"
+            printf '(allow file-read* (literal "%s"))\n' "${ancestor}"
+        done
+        printf '(allow file-read* file-write* (subpath "%s"))\n' "${WORKDIR}"
+    } >> "${TMPFILE}"
+fi
+
+exec sandbox-exec -f "${TMPFILE}" "${AGENT_BIN}" "$@"

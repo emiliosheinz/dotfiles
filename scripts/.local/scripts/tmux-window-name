@@ -5,4 +5,4 @@
 tty=$1
 pgid=$(ps -t "$tty" -o pgid=,stat= 2>/dev/null | awk '$2 ~ /\+/ { print $1; exit }')
 [ -z "$pgid" ] && exit 1
-ps -p "$pgid" -o comm= 2>/dev/null | tr -d ' '
+ps -p "$pgid" -o comm= 2>/dev/null | sed 's|.*/||' | tr -d ' '

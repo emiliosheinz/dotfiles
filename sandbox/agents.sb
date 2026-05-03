@@ -1,0 +1,612 @@
+(version 1)
+
+;; =============================================================================
+;; agents.sb — macOS sandbox-exec profile
+;; HOME_DIR is set to SANDBOX_HOME_DIR here and substituted at launch time
+;; by sandbox-run, so the same file works on every machine (personal, spoke).
+;; Generated 2026-05-03
+;;
+;; Assembly order mirrors Agent Safehouse (github.com/eugene1g/agent-safehouse):
+;;   00-base → 10-system-runtime → 20-network → 30-toolchains (homebrew, node,
+;;   python) → 40-shared → 50-integrations-core (git, gh) → 60-agents (claude,
+;;   opencode) → custom paths → security overrides
+;;
+;; Evaluation model: SBPL uses last-match-wins within a rule class.
+;;   (deny default) anchors the base; allow rules override it; targeted
+;;   (deny ...) rules placed last override any earlier allows.
+;;
+;; NOTE: sandbox-exec (and the underlying sandbox_init API) is formally deprecated
+;; as of macOS 10.15. It continues to function on current macOS releases but Apple
+;; may remove it in a future OS version without notice. There is no supported
+;; command-line replacement; the App Sandbox entitlement requires code signing and
+;; is not directly applicable to CLI agents. Monitor macOS release notes for
+;; changes to sandbox enforcement behavior.
+;; =============================================================================
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 00-base  (mirrors profiles/00-base.sb)
+;; Deny-default + HOME_DIR definition + path helper macros.
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(define HOME_DIR "SANDBOX_HOME_DIR")
+(define (home-subpath rel) (subpath (string-append HOME_DIR rel)))
+(define (home-literal rel) (literal (string-append HOME_DIR rel)))
+(define (home-prefix  rel) (prefix  (string-append HOME_DIR rel)))
+
+(deny default)
+
+;; Ancestor literals required so path resolution can traverse
+;; / → /Users → HOME before reaching any granted subpath.
+;; Mirrors Safehouse's emit_path_ancestor_literals() behavior.
+(allow file-read*
+    (literal "/")                                                     ;; VFS root traversal.
+    (literal "/Users")                                                ;; /Users directory listing.
+    (home-literal "")                                                 ;; HOME directory listing.
+    (home-literal "/Library")                                         ;; Ancestor for all ~/Library/* grants.
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 10-system-runtime  (mirrors profiles/10-system-runtime.sb)
+;; Process execution, tmp/dev access, system binaries, baseline mach services.
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read*
+    (subpath "/usr")                                                  ;; Core system binaries and libraries.
+    (subpath "/bin")                                                  ;; POSIX userland (sh, ls, etc.).
+    (subpath "/sbin")                                                 ;; System utilities.
+    (subpath "/opt")                                                  ;; Standard Homebrew install root (not this machine's prefix, but some tools probe it).
+    (subpath "/System/Library")                                       ;; macOS runtime frameworks and resources.
+    (subpath "/System/Volumes/Preboot")                               ;; dyld/framework lookups that resolve through Preboot on modern macOS.
+    (subpath "/Library/Apple")                                        ;; Apple private frameworks used by Node/JVM/native toolchains.
+    (subpath "/Library/Developer")                                    ;; Xcode CLT; system git at /usr/bin/git resolves here via xcode-select.
+    (subpath "/Library/Frameworks")                                   ;; Global framework lookup path for language runtimes.
+    (subpath "/Library/Fonts")                                        ;; Font reads used by headless renderers.
+    (subpath "/Library/Filesystems/NetFSPlugins")                     ;; NetFS plugins loaded during filesystem lookups.
+    (subpath "/Library/Preferences/Logging")                          ;; macOS logging stack reads prefs during process init.
+    (literal "/Library/Preferences/.GlobalPreferences.plist")         ;; Locale/time/user defaults.
+    (literal "/Library/Preferences/com.apple.networkd.plist")         ;; DNS/network bootstrap.
+    (literal "/dev")                                                  ;; /dev directory listing; shells enumerate it during init.
+)
+
+(allow file-read-metadata
+    (subpath "/System")                                               ;; stat/readdir across /System during loader path resolution.
+    (subpath "/private/var/run")                                      ;; Metadata traversal for /private/var/run socket namespace.
+)
+
+(allow file-read*
+    (literal "/private")
+    (literal "/private/var")
+    (subpath "/private/var/db/timezone")
+    (literal "/private/var/select/sh")
+    (literal "/private/var/select/developer_dir")
+    (literal "/var/select/developer_dir")
+    (literal "/private/var/db/xcode_select_link")
+    (literal "/var/db/xcode_select_link")
+    (literal "/private/etc/hosts")
+    (literal "/private/etc/resolv.conf")
+    (literal "/private/etc/services")
+    (literal "/private/etc/protocols")
+    (literal "/private/etc/shells")
+    (subpath "/private/etc/ssl")                                      ;; TLS CA bundles used by HTTPS/package clients.
+    (literal "/private/etc/localtime")
+    (literal "/etc")
+    (literal "/var")
+)
+
+(allow file-read-metadata
+    (literal "/home")
+    (literal "/private/etc")
+    (subpath "/dev")
+    (home-literal "/.config")                                         ;; XDG config root traversal for tool discovery.
+    (home-literal "/.cache")                                          ;; XDG cache root traversal.
+    (home-literal "/.local")                                          ;; XDG data root traversal.
+    (home-literal "/.local/share")                                    ;; XDG share dir traversal.
+)
+
+(allow file-read*
+    (home-prefix "/Library/Preferences/.GlobalPreferences")           ;; User-level locale/defaults variants.
+    (home-prefix "/Library/Preferences/com.apple.GlobalPreferences")
+    (home-subpath "/Library/Preferences/ByHost")                      ;; Per-host prefs read by security CLI and frameworks.
+    (home-literal "/.CFUserTextEncoding")                             ;; User text encoding; read by many processes.
+    (home-literal "/.config")                                         ;; XDG config root directory listing.
+    (home-literal "/.cache")                                          ;; XDG cache root directory listing.
+    (home-literal "/.local/bin")                                      ;; PATH probing for user-installed binaries.
+)
+
+(allow process-exec)                                                  ;; Spawn toolchain binaries, shells, and repo tools.
+(allow process-fork)                                                  ;; Normal child-process trees in CLI agents.
+(allow sysctl-read)                                                   ;; Runtime introspection used by many CLIs at startup.
+(allow process-info* (target same-sandbox))
+(allow signal (target same-sandbox))
+(allow mach-priv-task-port (target same-sandbox))
+(allow pseudo-tty)                                                    ;; Interactive terminal sessions and PTY allocation.
+
+(allow file-read* file-write*
+    (subpath "/tmp")
+    (subpath "/private/tmp")
+    (subpath "/var/folders")
+    (subpath "/private/var/folders")
+)
+
+;; Block launchd-managed per-user listener sockets (SSH agent, pasteboard) by default.
+;; These narrow denies override the broad /tmp allow above — placed here following
+;; Safehouse's defense-in-depth pattern from 10-system-runtime.sb.
+(deny file-read* file-write*
+    (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")
+    (regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")
+)
+
+(allow file-read* file-write*
+    (subpath "/dev/fd")
+    (literal "/dev/stdout")
+    (literal "/dev/stderr")
+    (literal "/dev/null")
+    (literal "/dev/tty")
+    (literal "/dev/ptmx")
+    (literal "/dev/dtracehelper")
+    (regex #"^/dev/tty")
+    (regex #"^/dev/ttys")
+    (regex #"^/dev/pty")
+)
+
+(allow file-read*
+    (literal "/dev/zero")
+    (literal "/dev/autofs_nowait")
+    (literal "/dev/urandom")
+    (literal "/dev/random")
+)
+
+(allow file-ioctl
+    (literal "/dev/dtracehelper")
+    (literal "/dev/tty")
+    (literal "/dev/ptmx")
+    (regex #"^/dev/tty")
+    (regex #"^/dev/ttys")
+    (regex #"^/dev/pty")
+)
+
+(allow mach-lookup
+    (global-name "com.apple.system.notification_center")
+    (global-name "com.apple.system.opendirectoryd.libinfo")
+    (global-name "com.apple.logd")
+    (global-name "com.apple.FSEvents")
+    (global-name "com.apple.SystemConfiguration.configd")
+    (global-name "com.apple.SystemConfiguration.DNSConfiguration")
+    (global-name "com.apple.trustd.agent")
+    (global-name "com.apple.diagnosticd")
+    (global-name "com.apple.analyticsd")
+    (global-name "com.apple.dnssd.service")
+    (global-name "com.apple.CoreServices.coreservicesd")
+    (global-name "com.apple.DiskArbitration.diskarbitrationd")
+    (global-name "com.apple.analyticsd.messagetracer")
+    (global-name "com.apple.system.logger")
+    (global-name "com.apple.coreservices.launchservicesd")
+)
+
+(allow system-socket)
+
+(allow ipc-posix-shm-read-data
+    (ipc-posix-name "apple.shm.notification_center")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 20-network  (mirrors profiles/20-network.sb)
+;; Full outbound + inbound; package installs, API calls, local dev servers.
+;; Exfiltration prevention is explicitly out of scope per Safehouse's threat model.
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow network*)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 30-toolchains: Homebrew — custom prefix ~/.homebrew
+;; Non-standard prefix: Safehouse's 10-system-runtime covers /opt (the standard
+;; prefix) but this machine uses ~/.homebrew. Read-only: agents reuse host tooling
+;; rather than installing new packages. Covers all Cellar binaries: nvim, tmux, bat,
+;; eza, fzf, rg, gh, opencode, python3, pnpm, lazygit, jq, zoxide, btop, and their
+;; libraries.
+;; ─────────────────────────────────────────────────────────────────────────────
+
+;; Read-only: agents reuse installed host tooling and must not modify Cellar binaries.
+;; Write access is not required for npm/pip/cargo installs; those write to project
+;; node_modules or the cache paths granted separately below.
+(allow file-read*
+    (home-subpath "/.homebrew")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 30-toolchains: Node.js  (mirrors profiles/30-toolchains/node.sb)
+;; Two version managers coexist: nvm (personal/main branch) and Volta (spoke
+;; work branch — VOLTA_HOME=$HOME/.volta set in spoke's zshenv).
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read* file-write*
+    ;; nvm — personal setup
+    (home-subpath "/.nvm")                                            ;; Managed Node runtimes, shims, and aliases.
+
+    ;; Volta — spoke work branch (https://get.volta.sh)
+    (home-subpath "/.volta")                                          ;; Toolchain images and shim binaries.
+
+    ;; npm
+    (home-subpath "/.npm")
+    (home-subpath "/.config/npm")
+    (home-subpath "/.cache/npm")
+    (home-subpath "/.cache/node")
+
+    ;; pnpm (also installed via Homebrew on this machine)
+    (home-subpath "/.config/pnpm")
+    (home-subpath "/.pnpm-state")
+    (home-subpath "/.pnpm-store")
+    (home-subpath "/.local/share/pnpm")
+    (home-subpath "/.local/state/pnpm")
+    (home-subpath "/Library/pnpm")
+    (home-subpath "/Library/Caches/pnpm")
+
+    ;; yarn (classic + modern)
+    (home-subpath "/.yarn")
+    (home-literal "/.yarnrc")
+    (home-literal "/.yarnrc.yml")
+    (home-subpath "/.config/yarn")
+    (home-subpath "/.cache/yarn")
+    (home-subpath "/Library/Caches/Yarn")
+
+    ;; configstore (npm ecosystem config persistence)
+    (home-subpath "/.config/configstore")
+
+    ;; Turborepo
+    (home-subpath "/.cache/turbo")
+    (home-subpath "/Library/Caches/turbo")
+
+    ;; Node ecosystem caches
+    (home-subpath "/Library/Caches/typescript")
+    (home-subpath "/Library/Caches/claude-cli-nodejs")
+)
+
+;; npm global credentials — read-only to prevent agent modification of registry tokens.
+(allow file-read*
+    (home-literal "/.npmrc")
+)
+
+;; Volta shell shims under ~/.local/state can cause EPERM during PATH resolution
+;; if metadata access is missing — mirrors the fnm note in Safehouse's node.sb.
+(allow file-read-metadata
+    (home-literal "/.local/state")
+    (home-subpath "/.local/state/pnpm")
+    (home-literal "/Library/Application Support")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 30-toolchains: Python  (mirrors profiles/30-toolchains/python.sb)
+;; Homebrew python3.14 binary is covered by the ~/.homebrew grant above.
+;; This section covers pip/virtualenv state paths only.
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read* file-write*
+    (home-subpath "/.cache/pip")
+    (home-subpath "/.config/pip")
+    (home-subpath "/Library/Caches/pip")
+    (home-subpath "/.virtualenvs")
+    (home-literal "/.python_history")
+)
+
+;; PyPI credentials — read-only to prevent agent modification of registry tokens.
+(allow file-read*
+    (home-literal "/.pypirc")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 40-shared: Agent common  (mirrors profiles/40-shared/agent-common.sb)
+;; Shared skills, agents, and guidance files.
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read*
+    (home-subpath "/.skills")
+    (home-subpath "/.agents")
+    (home-literal "/AGENTS.md")
+)
+
+(allow file-read*
+    (home-subpath "/.claude/agents")
+    (home-subpath "/.claude/skills")
+    (home-literal "/CLAUDE.md")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 50-integrations-core: Git  (mirrors profiles/50-integrations-core/git.sb)
+;; ~/.gitconfig and ~/.gitignore are dotfile symlinks into ~/dotfiles/.
+;; The ~/dotfiles R/W grant below covers the symlink targets; these literals
+;; cover the symlink names in HOME itself.
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read*
+    (home-prefix "/.gitconfig")
+    (home-prefix "/.gitignore")
+    (home-subpath "/.config/git")
+    (home-literal "/.gitattributes")
+    (home-literal "/.ssh")                                            ;; Directory listing for SSH config metadata.
+    (home-literal "/.ssh/config")
+    (home-literal "/.ssh/known_hosts")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 50-integrations-core: SCM CLIs  (mirrors profiles/50-integrations-core/scm-clis.sb)
+;; GitHub CLI (gh) auth tokens, cache, and state.
+;; ─────────────────────────────────────────────────────────────────────────────
+
+;; ~/.config/gh/hosts.yml contains OAuth tokens: read-only so the agent can
+;; authenticate but cannot write tokens back (they can't be silently rotated or read
+;; into a writable buffer and exfiltrated via a separate write call).
+;; Trade-off: if gh needs to refresh an expired token it will fail. Re-run
+;; `gh auth login` on the host and restart the session.
+(allow file-read*
+    (home-subpath "/.config/gh")
+)
+(allow file-read* file-write*
+    (home-subpath "/.cache/gh")
+    (home-subpath "/.local/share/gh")
+    (home-subpath "/.local/state/gh")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 55-integrations-optional: Keychain  (mirrors profiles/55-integrations-optional/keychain.sb)
+;; Required by Claude Code for OAuth token storage under "Claude Code-credentials".
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read* file-write*
+    (home-subpath "/Library/Keychains")                               ;; User keychain DB; Claude Code reads and refreshes OAuth tokens here.
+    (home-literal "/Library/Preferences/com.apple.security.plist")
+)
+
+(allow file-read*
+    (literal "/Library/Preferences/com.apple.security.plist")
+    (literal "/Library/Keychains/System.keychain")
+    (subpath "/private/var/db/mds")                                   ;; MDS message store used by securityd IPC.
+)
+
+(allow file-read-metadata
+    (home-literal "/Library/Keychains")
+    (literal "/Library")
+    (literal "/Library/Keychains")
+)
+
+(allow mach-lookup
+    (global-name "com.apple.SecurityServer")
+    (global-name "com.apple.security.agent")
+    (global-name "com.apple.securityd.xpc")
+    (global-name "com.apple.security.authhost")
+    (global-name "com.apple.secd")
+    (global-name "com.apple.trustd")
+)
+
+(allow ipc-posix-shm-read-data ipc-posix-shm-write-create ipc-posix-shm-write-data
+    (ipc-posix-name "com.apple.AppleDatabaseChanged")                 ;; Keychain change notifications.
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 60-agents: Claude Code  (mirrors profiles/60-agents/claude-code.sb)
+;; Binary: ~/.local/bin/claude → ~/.local/share/claude/versions/*
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read* file-write*
+    (home-subpath "/.cache/claude")
+    (home-subpath "/.claude")
+    (home-prefix "/.claude.json")
+    (home-literal "/.claude.lock")
+    (home-subpath "/.config/claude")
+    (home-subpath "/.local/state/claude")
+    (home-subpath "/.local/share/claude")
+    (home-literal "/.mcp.json")
+)
+
+;; ~/.local/bin/claude is covered by the read-only ~/.local/bin grant below.
+;; Agent definitions and skills are denied write in the security overrides section.
+(allow file-read*
+    (home-prefix "/.claude.json.")
+    (literal "/Library/Application Support/ClaudeCode/managed-settings.json")
+    (literal "/Library/Application Support/ClaudeCode/managed-mcp.json")
+    (literal "/Library/Application Support/ClaudeCode/CLAUDE.md")
+    (home-literal "/Library/Application Support/Claude/claude_desktop_config.json")
+    (home-subpath "/.config/ccstatusline")                            ;; ccstatusline config dir (may be a symlink — see dotfiles grant below).
+)
+
+
+;; Narrow metadata-only grant for VS Code editor handoff (Ctrl+G open-in-editor).
+;; Does not cold-start VS Code; only enough for Launch Services bundle lookup.
+(allow file-read-metadata
+    (literal "/Applications")
+    (subpath "/Applications/Visual Studio Code.app")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; 60-agents: openCode  (mirrors profiles/60-agents/opencode.sb)
+;; Binary: ~/.homebrew/bin/opencode (covered by Homebrew grant above).
+;; State: ~/.config/opencode (includes node_modules and package.json managed
+;; by openCode itself — R/W required).
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read* file-write*
+    (home-subpath "/.opencode")
+    (home-subpath "/.config/opencode")
+    (home-subpath "/.cache/opencode")
+    (home-subpath "/.local/share/opencode")
+    (home-subpath "/.local/share/opentui")
+    (home-subpath "/.local/state/opencode")
+    (home-literal "/.opencode.json")
+)
+
+;; GitHub Copilot token file (openCode reads this for Copilot auth).
+(allow file-read*
+    (home-subpath "/.config/github-copilot")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; Custom paths: projects, dotfiles, shell tooling
+;; ─────────────────────────────────────────────────────────────────────────────
+
+;; ~/dev/ — R/W with subpath so any new repo cloned here is automatically covered.
+(allow file-read* file-write*
+    (home-literal "/dev")                                             ;; ~/dev directory listing.
+    (home-subpath "/dev")                                             ;; All current and future projects.
+)
+
+;; ~/dotfiles — managed config repository, read-only.
+;; Symlinks under HOME (e.g. ~/.gitconfig, ~/.tmux.conf, ~/.config/ccstatusline)
+;; resolve through here; the sandbox follows symlinks to their targets so this grant
+;; is required for those reads to succeed. Write access is intentionally withheld —
+;; dotfiles changes must be made from outside the sandbox.
+(allow file-read*
+    (home-literal "/dotfiles")
+    (home-subpath "/dotfiles")
+)
+
+;; ~/.local/bin — claude symlink lives here; read-only to prevent PATH poisoning.
+;; Binaries written here by agents would survive the session and run unsandboxed.
+(allow file-read*
+    (home-subpath "/.local/bin")
+)
+
+;; ~/.local/scripts — tmux-sessionizer, tmux-window-name, sandbox-run.
+(allow file-read*
+    (home-literal "/.local/scripts")
+    (home-subpath "/.local/scripts")
+)
+
+;; Oh-my-zsh — read-only at runtime; no writes needed.
+(allow file-read*
+    (home-literal "/.oh-my-zsh")
+    (home-subpath "/.oh-my-zsh")
+)
+
+;; Zinit plugin manager — read-only at runtime.
+(allow file-read*
+    (home-subpath "/.local/share/zinit")
+)
+
+;; Neovim config (symlinked to ~/dotfiles/nvim/.config/nvim).
+(allow file-read*
+    (home-subpath "/.config/nvim")
+)
+
+;; tmux config (symlinked to ~/dotfiles/tmux/.tmux.conf).
+(allow file-read*
+    (home-literal "/.tmux.conf")
+    (home-literal "/.config/tmux")
+    (home-subpath "/.config/tmux")
+)
+
+;; zoxide database — updated on every cd; R/W required.
+(allow file-read* file-write*
+    (home-subpath "/.local/share/zoxide")
+)
+
+;; lazygit config (read-only; writes go to the repo worktree).
+(allow file-read*
+    (home-subpath "/.config/lazygit")
+)
+
+;; bat, btop config (read-only tool configs).
+(allow file-read*
+    (home-subpath "/.config/bat")
+    (home-subpath "/.config/btop")
+)
+
+;; iTerm2 config (read-only; not modified by agents).
+(allow file-read*
+    (home-subpath "/.config/iterm2")
+)
+
+;; ~/.aliases.zsh — sourced by .zshrc.
+(allow file-read*
+    (home-literal "/.aliases.zsh")
+)
+
+;; zsh config symlinks — symlink names in HOME must be readable so zsh can follow
+;; them to their targets in ~/dotfiles/ (which is granted read-only above).
+;; Without these, `zsh -l` and `zsh -i` silently skip profile sourcing, leaving
+;; PATH and aliases unset for any login subshell the agent spawns.
+(allow file-read*
+    (home-literal "/.zshrc")
+    (home-literal "/.zshenv")
+    (home-literal "/.zprofile")
+    (home-literal "/.zlogin")
+)
+
+;; ─────────────────────────────────────────────────────────────────────────────
+;; Security: Targeted denies
+;; Placed last so they override any broader allow above (last-match-wins in SBPL).
+;; Most of these paths were never granted above; the explicit denies document
+;; intent and provide defense-in-depth if allow rules are later broadened.
+;; ─────────────────────────────────────────────────────────────────────────────
+
+;; SSH private keys — only ~/.ssh/config and ~/.ssh/known_hosts are allowed above.
+;; home-prefix covers id_rsa, id_ed25519, id_ecdsa, id_dsa and any future key files.
+(deny file-read* file-write*
+    (home-prefix "/.ssh/id_")
+)
+
+;; GnuPG keyring — private keys and trust database.
+(deny file-read* file-write*
+    (home-subpath "/.gnupg")
+)
+
+;; Cloud credentials — agents should not read or write auth tokens.
+(deny file-read* file-write*
+    (home-subpath "/.aws")
+    (home-subpath "/.azure")
+    (home-subpath "/.kube")
+    (home-subpath "/.config/gcloud")
+)
+
+;; macOS Keychain database files are granted above for Claude Code auth.
+
+;; Browser sensitive data (history, cookies, stored passwords).
+(deny file-read* file-write*
+    (home-subpath "/Library/Application Support/Google/Chrome")
+    (home-subpath "/Library/Application Support/Firefox")
+    (home-subpath "/Library/Application Support/Safari")
+    (home-subpath "/Library/Safari")
+)
+
+;; macOS Mail and Messages — personal communication data.
+(deny file-read* file-write*
+    (home-subpath "/Library/Mail")
+    (home-subpath "/Library/Messages")
+)
+
+;; Agent self-modification guard: deny writes to instruction files, permission
+;; settings, and agent/skill definitions for both Claude Code and openCode.
+;; Runtime state (projects/, session-env/, cache, node_modules, lock files)
+;; remains writable via the broader ~/.claude grant above.
+(deny file-write*
+    ;; Claude Code — global config and self-modification targets
+    (home-literal "/.claude/CLAUDE.md")
+    (home-literal "/.claude/settings.json")
+    (home-literal "/.claude/settings.local.json")
+    (home-subpath "/.claude/agents")
+    (home-subpath "/.claude/skills")
+    ;; openCode
+    (home-literal "/.config/opencode/AGENTS.md")
+    (home-literal "/.config/opencode/opencode.json")
+    (home-literal "/.config/opencode/tui.json")
+    (home-literal "/.opencode.json")
+)
+
+;; Project-level .claude/settings.json — deny writes across all repos so agents
+;; cannot escalate their own permissions for future sessions by modifying
+;; per-project Claude Code settings files under ~/dev/.
+(deny file-write*
+    (regex #"/\.claude/settings\.json$")
+    (regex #"/\.claude/settings\.local\.json$")
+)

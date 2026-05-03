@@ -31,3 +31,16 @@ if command -v btop &> /dev/null; then
   alias top='btop'
   alias htop='btop'
 fi
+
+# Sandboxed agents — run claude and opencode under sandbox-exec.
+# Uses ~/dotfiles/sandbox/agents.sb via the sandbox-run wrapper.
+# Workdirs under ~/dev/ and ~/dotfiles/ need no extra config; all other
+# paths get ancestor literals injected automatically at launch time.
+if [[ -x "${HOME}/.local/scripts/sandbox-run" ]]; then
+  function claude() {
+    sandbox-run claude --dangerously-skip-permissions "$@"
+  }
+  function opencode() {
+    OPENCODE_PERMISSION='{"*":"allow"}' sandbox-run opencode "$@"
+  }
+fi
