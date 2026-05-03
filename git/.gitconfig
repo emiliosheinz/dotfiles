@@ -8,6 +8,7 @@
 	required = true
 [core]
 	editor = nvim 
+  excludesfile = /Users/emiliosheinz/.gitignore
 [credential]
 	username = emiliosheinz
 	helper = osxkeychain
