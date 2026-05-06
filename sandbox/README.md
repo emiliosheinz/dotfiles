@@ -19,7 +19,7 @@ sandbox-run opencode [args...]
 
 `sandbox-run` renders the profile to a temp file (substituting `SANDBOX_HOME_DIR`), then calls `sandbox-exec -f <tmpfile> <agent-binary> [args...]`. The temp file is deleted on exit.
 
-If the current working directory is outside `~/dev/` or `~/dotfiles/`, `sandbox-run` automatically injects ancestor `file-read*` literals and a `file-read* file-write*` subpath rule for that directory so the agent can operate there. Paths containing `"` or `\` are rejected to prevent SBPL injection.
+`sandbox-run` always injects ancestor `file-read*` literals and a `file-read* file-write*` subpath rule for the current working directory, scoping write access to that directory and its descendants. Running from `~/dev/myproject` grants write only to that project; running from `~/dotfiles` grants write to the entire dotfiles tree. Paths containing `"` or `\` are rejected to prevent SBPL injection.
 
 ## Permissions reference
 
@@ -56,8 +56,8 @@ If the current working directory is outside `~/dev/` or `~/dotfiles/`, `sandbox-
 | `~/.opencode`, `~/.config/opencode`, `~/.cache/opencode`, related state | read + write | openCode reads and writes session data, config, and cache here during normal operation |
 | `~/.config/opencode/AGENTS.md`, `~/.config/opencode/opencode.json`, `~/.opencode.json` | **deny write** | openCode self-modification guard, mirroring the Claude Code equivalent |
 | `~/.config/github-copilot` | read | Copilot CLI reads auth tokens from here; write is blocked to prevent silent token rotation |
-| `~/dev/` | read + write | All current and future project repositories. Full read/write over all code — the widest-impact grant in the profile, and intentional for a coding agent |
-| `~/dotfiles` | read | Managed config repo; read-only. Required so symlink targets (`.gitconfig`, `.tmux.conf`, etc.) resolve correctly |
+| `~/dev/` | CWD-scoped read + write | No static grant. `sandbox-run` injects a `file-read* file-write*` subpath rule scoped to the launch CWD and ancestor `file-read*` literals for path traversal. Agents launched from `~/dev/myproject` can write only within that project; sibling repos are inaccessible |
+| `~/dotfiles` | read (static); CWD-scoped read + write (injected) | Static read-only grant so symlink targets (`.gitconfig`, `.tmux.conf`, etc.) resolve correctly from any CWD. When launched from inside `~/dotfiles`, `sandbox-run` additionally injects a `file-read* file-write*` subpath rule granting write access |
 | `~/.local/bin` | read | Binary symlinks (e.g. `claude`) are resolved from here; read-only prevents PATH poisoning — agents cannot drop executables that survive the session |
 | `~/.local/scripts`, `~/.oh-my-zsh`, `~/.local/share/zinit`, `~/.config/nvim`, `~/.config/tmux`, `~/.config/lazygit`, `~/.config/bat`, `~/.config/btop`, `~/.zshrc`, `~/.zshenv`, `~/.zprofile`, `~/.zlogin`, `~/.aliases.zsh` | read | Agents source these indirectly through the tools they spawn; read access is required for normal shell and tool startup |
 | `~/.local/share/zoxide` | read + write | Zoxide jump database; writable because it is updated on every directory change |
@@ -97,7 +97,7 @@ If the current working directory is outside `~/dev/` or `~/dotfiles/`, `sandbox-
 | Risk | Mitigation |
 |---|---|
 | Unrestricted network (exfiltration) | Out of scope by design. Use a per-process app firewall externally |
-| Full `~/dev/` read/write | Intentional — required for a coding agent. Git history provides recovery |
+| CWD-scoped read/write (injected at launch) | Scoped to the launch directory — sibling repos are inaccessible. Git history provides recovery within the project |
 | Keychain read/write | Scoped to `~/Library/Keychains`; required for Claude Code OAuth. No tighter grant is possible while keeping auth functional |
 | Readable auth tokens (`.npmrc`, `.pypirc`, `~/.config/gh`, `~/.config/github-copilot`) | All are read-only. Exfiltration risk remains due to `network*` |
 | Unrestricted `process-exec` | No known mitigation within SBPL without breaking toolchain usability |

@@ -455,12 +455,6 @@
 ;; Custom paths: projects, dotfiles, shell tooling
 ;; ─────────────────────────────────────────────────────────────────────────────
 
-;; ~/dev/ — R/W with subpath so any new repo cloned here is automatically covered.
-(allow file-read* file-write*
-    (home-literal "/dev")                                             ;; ~/dev directory listing.
-    (home-subpath "/dev")                                             ;; All current and future projects.
-)
-
 ;; ~/dotfiles — managed config repository, read-only.
 ;; Symlinks under HOME (e.g. ~/.gitconfig, ~/.tmux.conf, ~/.config/ccstatusline)
 ;; resolve through here; the sandbox follows symlinks to their targets so this grant
