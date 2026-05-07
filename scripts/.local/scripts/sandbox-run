@@ -65,4 +65,9 @@ fi
     printf '(allow file-read* file-write* (subpath "%s"))\n' "${WORKDIR}"
 } >> "${TMPFILE}"
 
+# COLUMNS is a zsh-internal variable; export it so subprocesses (Node.js, tput)
+# can detect the real terminal width inside the sandbox.
+(( COLUMNS > 0 )) || COLUMNS=$(stty size </dev/tty 2>/dev/null | awk '{print $2}')
+export COLUMNS
+
 exec sandbox-exec -f "${TMPFILE}" "${AGENT_BIN}" "$@"
