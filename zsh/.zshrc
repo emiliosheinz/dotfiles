@@ -149,8 +149,6 @@ fi
 # Load custom aliases
 [ -f ~/.aliases.zsh ] && source ~/.aliases.zsh
 
-# Keybindings
-bindkey -s ^f "tmux-sessionizer\n"
 
 export FZF_CTRL_R_OPTS="
   --bind 'ctrl-y:execute-silent(echo -n {2..} | pbcopy)+abort'
