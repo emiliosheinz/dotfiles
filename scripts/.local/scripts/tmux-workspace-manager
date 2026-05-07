@@ -13,14 +13,12 @@ case "$MODE" in
         query=$(printf "%s" "$result" | head -1)
         selected=$(printf "%s" "$result" | sed -n '2p')
 
-        if [[ -z $query ]]; then
-            exit 0
-        fi
-
         if [[ -n $selected ]]; then
             session_name="$selected"
+        elif [[ -n $query ]]; then
+            session_name=$(echo "$query" | tr ' .' '-' | sed 's/-\+$//')
         else
-            session_name=$(echo "$query" | tr ' .' '-')
+            exit 0
         fi
 
         tmux_running=$(pgrep tmux)
