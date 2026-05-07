@@ -130,9 +130,10 @@
     (subpath "/private/var/folders")
 )
 
-;; Block launchd-managed per-user listener sockets (SSH agent, pasteboard) by default.
+;; Block launchd-managed per-user listener sockets (SSH agent) by default.
 ;; These narrow denies override the broad /tmp allow above — placed here following
 ;; Safehouse's defense-in-depth pattern from 10-system-runtime.sb.
+;; Pasteboard (pboard) is intentionally allowed via mach-lookup below.
 (deny file-read* file-write*
     (regex #"^/private/tmp/com\.apple\.launchd\.[^/]+/Listeners$")
     (regex #"^/tmp/com\.apple\.launchd\.[^/]+/Listeners$")
@@ -183,6 +184,12 @@
     (global-name "com.apple.analyticsd.messagetracer")
     (global-name "com.apple.system.logger")
     (global-name "com.apple.coreservices.launchservicesd")
+    (global-name "com.apple.pboard")                                     ;; Legacy pasteboard daemon.
+    (global-name "com.apple.pasteboard.1")                               ;; Modern pasteboard service; required for clipboard image paste on macOS 14+.
+    (global-name "com.apple.coreservices.uasharedpasteboardmanager.xpc") ;; Shared pasteboard manager (image clipboard path on modern macOS).
+    (global-name "com.apple.coreservices.uasharedpasteboardaux.xpc")     ;; Shared pasteboard auxiliary service.
+    (global-name "com.apple.coreservices.uauseractivitypasteboardclient.xpc") ;; User-activity pasteboard client.
+    (global-name "com.apple.coreservices.uasharedpasteboardcontroll.xpc") ;; Shared pasteboard controller.
 )
 
 (allow system-socket)
