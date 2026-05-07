@@ -20,7 +20,7 @@ case "$MODE" in
         if [[ -n $selected ]]; then
             session_name="$selected"
         else
-            session_name=$(echo "$query" | tr ' .' '_')
+            session_name=$(echo "$query" | tr ' .' '-')
         fi
 
         tmux_running=$(pgrep tmux)
