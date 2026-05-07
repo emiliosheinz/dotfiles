@@ -5,4 +5,12 @@
 tty=$1
 pgid=$(ps -t "$tty" -o pgid=,stat= 2>/dev/null | awk '$2 ~ /\+/ { print $1; exit }')
 [ -z "$pgid" ] && exit 1
-ps -p "$pgid" -o comm= 2>/dev/null | sed 's|.*/||' | tr -d ' '
+cmd=$(ps -p "$pgid" -o comm= 2>/dev/null | sed 's|.*/||' | tr -d ' ')
+
+if [ "$cmd" = "nvim" ]; then
+  cwd=$(lsof -p "$pgid" -a -d cwd -Fn 2>/dev/null | awk '/^n/ { print substr($0,2); exit }')
+  folder=$(basename "$cwd")
+  echo "nvim-${folder}"
+else
+  echo "$cmd"
+fi
