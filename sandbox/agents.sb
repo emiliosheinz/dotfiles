@@ -588,6 +588,11 @@
     (home-literal "/.aliases.zsh")
 )
 
+;; ~/.spoke-env — Spoke environment variables sourced by .zshrc.
+(allow file-read*
+    (home-literal "/.spoke-env")
+)
+
 ;; zsh config symlinks — symlink names in HOME must be readable so zsh can follow
 ;; them to their targets in ~/dotfiles/ (which is granted read-only above).
 ;; Without these, `zsh -l` and `zsh -i` silently skip profile sourcing, leaving
