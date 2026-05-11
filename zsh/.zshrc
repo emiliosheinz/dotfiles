@@ -159,3 +159,5 @@ export FZF_CTRL_R_OPTS="
 export FZF_CTRL_T_OPTS="
   --walker-skip .git,node_modules,target
   --layout reverse"
+
+if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi

@@ -1,0 +1,1 @@
+worktree-path = "~/dev/.worktrees/{{ branch | sanitize }}/{{ repo }}"
