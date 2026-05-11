@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# ws: tmux workspace manager.
+# Workspaces are tmux sessions. Sessions prefixed with "backstage-" are
+# internal and excluded from all workspace listings.
+# Typed queries are normalised (spaces and dots → hyphens, trailing hyphens
+# stripped) before use as a session name.
+#
+# Usage:
+#   ws [switch]   fzf-pick or type a workspace name to switch to (or create)
+#   ws kill       fzf-pick a workspace to kill (also kills its backstage sessions)
+
+exec tmux-workspace-manager "$@"
