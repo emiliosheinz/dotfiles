@@ -508,8 +508,10 @@
 )
 
 ;; zoxide database — updated on every cd; R/W required.
+;; Covers both the XDG path and the macOS-native default (Library/Application Support/zoxide).
 (allow file-read* file-write*
     (home-subpath "/.local/share/zoxide")
+    (home-subpath "/Library/Application Support/zoxide")
 )
 
 ;; lazygit config (read-only; writes go to the repo worktree).
