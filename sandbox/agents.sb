@@ -459,6 +459,20 @@
 
 
 ;; ─────────────────────────────────────────────────────────────────────────────
+;; 60-agents: Docker CLI
+;; Binary: ~/.homebrew/bin/docker (covered by Homebrew grant above).
+;; Config: ~/.docker — credentials, contexts, buildx state, compose files.
+;; Daemon: /var/run/docker.sock (symlink → /private/var/run/docker.sock).
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read* file-write*
+    (home-subpath "/.docker")                                           ;; CLI config, credentials, contexts, buildx state.
+    (literal "/var/run/docker.sock")                                    ;; Docker daemon socket (symlink).
+    (literal "/private/var/run/docker.sock")                            ;; Docker daemon socket (resolved path).
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
 ;; Custom paths: projects, dotfiles, shell tooling
 ;; ─────────────────────────────────────────────────────────────────────────────
 
