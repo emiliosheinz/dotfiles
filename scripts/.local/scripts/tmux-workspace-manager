@@ -40,7 +40,7 @@ case "$MODE" in
         fi
         ;;
     kill)
-        selected=$(get_workspaces | fzf --prompt="kill workspace: ")
+        selected=$(get_workspaces | fzf --prompt="workspace: ")
 
         if [[ -z $selected ]]; then
             exit 0
