@@ -1,0 +1,11 @@
+# tmux-256color with the Sync (DEC mode 2026) extended capability.
+# Installed to ~/.terminfo so it shadows the macOS system entry, which is
+# built from a pre-Sync ncurses release. Without Sync in terminfo, programs
+# inside tmux panes (e.g. Neovim) cannot detect synchronized-output support
+# and emit hide/show cursor sequences un-batched, producing visible flicker
+# on every cursor move and shell prompt redraw.
+#
+# Install with:  /usr/bin/tic -x -o ~/.terminfo tmux/tmux-256color-sync.src
+tmux-256color|tmux with 256 colors and synchronized output,
+	Sync=\E[?2026%?%p1%{1}%-%tl%eh%;,
+	use=tmux-256color,
