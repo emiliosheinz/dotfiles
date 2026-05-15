@@ -53,16 +53,37 @@ case "$MODE" in
         tmux kill-session -t "$selected"
         ;;
     backstage)
-        session_name="$2"
-        current_path="$3"
+        subcommand="${2:-}"
+        case "$subcommand" in
+            enter)
+                session_name="$3"
+                current_path="$4"
 
-        clean=$(basename "$current_path" | tr -cs '[:alnum:]_-' '-' | tr '[:upper:]' '[:lower:]' | sed 's/-*$//')
-        target="backstage-${session_name}-${clean}"
+                clean=$(basename "$current_path" | tr -cs '[:alnum:]_-' '-' | tr '[:upper:]' '[:lower:]' | sed 's/-*$//')
+                target="backstage-${session_name}-${clean}"
 
-        if ! tmux has-session -t "$target" 2>/dev/null; then
-            tmux new-session -d -s "$target" -c "$current_path"
-        fi
+                if ! tmux has-session -t "$target" 2>/dev/null; then
+                    tmux new-session -d -s "$target" -c "$current_path"
+                fi
+                tmux set-option -t "$target" @parent_session "$session_name"
 
-        tmux display-popup -B -w 100% -h 100% -E "tmux attach-session -t '$target'"
+                tmux display-popup -B -w 100% -h 100% -E "tmux attach-session -t '$target'"
+                ;;
+            leave)
+                backstage_session="$3"
+                client_type="$4"
+
+                if [ "$client_type" = "popup" ]; then
+                    tmux detach-client
+                    exit 0
+                fi
+
+                parent=$(tmux show-options -t "$backstage_session" -qv @parent_session 2>/dev/null)
+                if [ -z "$parent" ] || ! tmux has-session -t "$parent" 2>/dev/null; then
+                    parent=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -v '^backstage-' | head -1)
+                fi
+                [ -n "$parent" ] && tmux switch-client -t "$parent" || tmux detach-client
+                ;;
+        esac
         ;;
 esac
