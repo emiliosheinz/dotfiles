@@ -106,12 +106,6 @@ brew install tmux
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 ~/.tmux/plugins/tpm/bin/install_plugins
 
-# Install tmux-256color terminfo with Sync (DEC 2026) extension so
-# programs inside tmux panes (Neovim) can detect synchronized output and
-# avoid cursor flicker on each redraw. See .specs/bugs/tmux-256color-missing-sync-terminfo.md
-echo "📦 Installing tmux-256color terminfo with Sync extension"
-/usr/bin/tic -x -o "$HOME/.terminfo" "~/tmux-256color-sync.src"
-
 # Node
 echo "📦 Installing Node"
 wait_for_confirmation
