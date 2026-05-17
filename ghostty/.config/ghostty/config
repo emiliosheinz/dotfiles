@@ -1,0 +1,8 @@
+theme = Catppuccin Mocha
+font-family = FiraCode Nerd Font
+font-style = Retina
+font-size = 14
+adjust-cell-height = 20%
+font-thicken = true
+
+macos-titlebar-style = hidden

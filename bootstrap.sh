@@ -40,6 +40,7 @@ stow karabiner
 stow btop
 stow macos
 stow ccstatusline
+stow ghostty
 
 # Utilities
 echo "📦 Installing Utilities"
@@ -87,7 +88,12 @@ fi
 # iTerm2
 echo "📦 Installing iTerm2"
 wait_for_confirmation
-brew install --cask iterm2 
+brew install --cask iterm2
+
+# Ghostty
+echo "📦 Installing Ghostty"
+wait_for_confirmation
+brew install --cask ghostty
 
 # ZSH
 echo "📦 Installing Oh My Zsh"
