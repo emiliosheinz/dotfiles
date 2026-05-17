@@ -5,6 +5,12 @@
 # Always injects ancestor file-read* literals and a file-read* file-write*
 # subpath rule for the CWD, scoping write access to the current project.
 #
+# When the CWD is inside ~/dev/.worktrees/, additional grants are injected so
+# git operations can reach the bare repo at ~/dev/<repo>:
+#   - CWD = ~/dev/.worktrees/<branch>/<repo> (or deeper) → grants ~/dev/<repo>
+#   - CWD = ~/dev/.worktrees/<branch>          → grants ~/dev (multi-repo case)
+# Outside ~/dev/.worktrees/, no extra grants are emitted.
+#
 # Usage:
 #   sandbox-run claude [args...]
 #   sandbox-run opencode [args...]
@@ -64,6 +70,46 @@ fi
     done
     printf '(allow file-read* file-write* (subpath "%s"))\n' "${WORKDIR}"
 } >> "${TMPFILE}"
+
+# Worktree-aware grant injection. When WORKDIR is inside ~/dev/.worktrees/, git
+# needs to reach the bare repo at ~/dev/<repo>. Emit grants matching the CWD
+# depth:
+#   ~/dev/.worktrees/<branch>          → grant ~/dev (multi-repo feature work)
+#   ~/dev/.worktrees/<branch>/<repo>+  → grant ~/dev/<repo> (single-repo work)
+# Anything outside ~/dev/.worktrees/ falls through with no additional grants.
+readonly WT_ROOT="${HOME_DIR}/dev/.worktrees"
+if [[ "${WORKDIR}" == "${WT_ROOT}"/* ]]; then
+    WT_REL="${WORKDIR#${WT_ROOT}/}"
+    local -a wt_parts
+    wt_parts=("${(@s:/:)WT_REL}")
+    WT_BRANCH="${wt_parts[1]}"
+    WT_REPO="${wt_parts[2]:-}"
+
+    # Defense in depth: WORKDIR already passed the "/\ check above, so any
+    # component derived from it cannot reintroduce those characters. Re-check
+    # anyway so the failure points at the specific component.
+    if [[ "${WT_BRANCH}" =~ [\"\\] ]]; then
+        print -u2 "sandbox-run: worktree branch component contains characters unsafe for sandbox policy injection: ${WT_BRANCH}"
+        exit 1
+    fi
+    if [[ -n "${WT_REPO}" && "${WT_REPO}" =~ [\"\\] ]]; then
+        print -u2 "sandbox-run: worktree repo component contains characters unsafe for sandbox policy injection: ${WT_REPO}"
+        exit 1
+    fi
+
+    {
+        if [[ -z "${WT_REPO}" ]]; then
+            printf '\n;; Worktree injection: branch-folder CWD %s\n' "${WORKDIR}"
+            printf '(allow file-read* (literal "%s"))\n' "${HOME_DIR}/dev"
+            printf '(allow file-read* file-write* (subpath "%s"))\n' "${HOME_DIR}/dev"
+        else
+            printf '\n;; Worktree injection: repo-folder CWD %s\n' "${WORKDIR}"
+            printf '(allow file-read* (literal "%s"))\n' "${HOME_DIR}/dev"
+            printf '(allow file-read* (literal "%s"))\n' "${HOME_DIR}/dev/${WT_REPO}"
+            printf '(allow file-read* file-write* (subpath "%s"))\n' "${HOME_DIR}/dev/${WT_REPO}"
+        fi
+    } >> "${TMPFILE}"
+fi
 
 # COLUMNS is a zsh-internal variable; export it so subprocesses (Node.js, tput)
 # can detect the real terminal width inside the sandbox.
