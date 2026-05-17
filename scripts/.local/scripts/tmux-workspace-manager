@@ -52,6 +52,35 @@ case "$MODE" in
 
         tmux kill-session -t "$selected"
         ;;
+    wt)
+        subcommand="${2:-}"
+        case "$subcommand" in
+            switch)
+                branch="${3:-}"
+                if [[ -z "$branch" && -n "$TMUX" ]]; then
+                    session=$(tmux display-message -p '#S')
+                    if [[ "$session" != backstage-* ]]; then
+                        branch="$session"
+                    fi
+                fi
+                if [[ -z "$branch" ]]; then
+                    echo "ws wt switch: branch required. Pass a branch argument (ws wt switch <branch>) or run from inside the workspace session." >&2
+                    exit 1
+                fi
+
+                if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+                    exec wt switch "$branch"
+                else
+                    exec wt switch --create "$branch"
+                fi
+                ;;
+            *)
+                echo "ws wt: unknown subcommand: ${subcommand:-<none>}" >&2
+                echo "Usage: ws wt switch [branch]" >&2
+                exit 1
+                ;;
+        esac
+        ;;
     backstage)
         subcommand="${2:-}"
         case "$subcommand" in

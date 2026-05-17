@@ -6,7 +6,8 @@
 # stripped) before use as a session name.
 #
 # Usage:
-#   ws [switch]   fzf-pick or type a workspace name to switch to (or create)
-#   ws kill       fzf-pick a workspace to kill (also kills its backstage sessions)
+#   ws [switch]              fzf-pick or type a workspace name to switch to (or create)
+#   ws kill                  fzf-pick a workspace to kill (also kills its backstage sessions)
+#   ws wt switch [branch]    switch to the worktree for [branch] (defaults to current workspace name)
 
 exec tmux-workspace-manager "$@"
