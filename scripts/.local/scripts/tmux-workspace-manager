@@ -74,9 +74,75 @@ case "$MODE" in
                     exec wt switch --create "$branch"
                 fi
                 ;;
+            remove)
+                worktrees_root="$HOME/dev/.worktrees"
+                if [[ ! -d "$worktrees_root" ]]; then
+                    echo "ws wt remove: $worktrees_root does not exist." >&2
+                    exit 1
+                fi
+
+                selected=$(find "$worktrees_root" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | fzf --prompt="worktree: ")
+                if [[ -z "$selected" ]]; then
+                    exit 0
+                fi
+
+                branch=$(basename "$selected")
+                removed=()
+                skipped_names=()
+                skipped_codes=()
+                skipped_tails=()
+
+                while IFS= read -r -d '' repo_dir; do
+                    [[ -d "$repo_dir" ]] || continue
+                    repo_name=$(basename "$repo_dir")
+                    output=$( (cd "$repo_dir" && wt remove "$branch" </dev/null) 2>&1 )
+                    exit_code=$?
+                    if [[ $exit_code -eq 0 ]]; then
+                        removed+=("$repo_name")
+                    else
+                        skipped_names+=("$repo_name")
+                        skipped_codes+=("$exit_code")
+                        skipped_tails+=("$(printf '%s' "$output" | tail -n 3)")
+                    fi
+                done < <(find "$selected" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
+
+                echo "ws wt remove: $branch"
+                echo "  removed (${#removed[@]}):"
+                if [[ ${#removed[@]} -eq 0 ]]; then
+                    echo "    (none)"
+                else
+                    for repo in "${removed[@]}"; do
+                        echo "    - $repo"
+                    done
+                fi
+                echo "  skipped (${#skipped_names[@]}):"
+                if [[ ${#skipped_names[@]} -eq 0 ]]; then
+                    echo "    (none)"
+                else
+                    for i in "${!skipped_names[@]}"; do
+                        echo "    - ${skipped_names[$i]} (exit ${skipped_codes[$i]})"
+                        while IFS= read -r line; do
+                            [[ -n "$line" ]] && echo "        $line"
+                        done <<< "${skipped_tails[$i]}"
+                    done
+                fi
+
+                if [[ ${#skipped_names[@]} -eq 0 ]]; then
+                    if rmdir "$selected" 2>/dev/null; then
+                        echo "  branch folder: removed"
+                        exit 0
+                    else
+                        echo "  branch folder: rmdir failed; unexpected content remains in $selected" >&2
+                        exit 1
+                    fi
+                else
+                    echo "  branch folder: left in place"
+                    exit 1
+                fi
+                ;;
             *)
                 echo "ws wt: unknown subcommand: ${subcommand:-<none>}" >&2
-                echo "Usage: ws wt switch [branch]" >&2
+                echo "Usage: ws wt {switch [branch] | remove}" >&2
                 exit 1
                 ;;
         esac

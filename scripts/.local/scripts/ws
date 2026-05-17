@@ -9,5 +9,6 @@
 #   ws [switch]              fzf-pick or type a workspace name to switch to (or create)
 #   ws kill                  fzf-pick a workspace to kill (also kills its backstage sessions)
 #   ws wt switch [branch]    switch to the worktree for [branch] (defaults to current workspace name)
+#   ws wt remove             fzf-pick a branch folder under ~/dev/.worktrees and remove every worktree in it
 
 exec tmux-workspace-manager "$@"
