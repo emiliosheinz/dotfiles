@@ -81,12 +81,12 @@ case "$MODE" in
                     exit 1
                 fi
 
-                selected=$(find "$worktrees_root" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | fzf --prompt="worktree: ")
-                if [[ -z "$selected" ]]; then
+                branch=$(find "$worktrees_root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | fzf --prompt="worktree: ")
+                if [[ -z "$branch" ]]; then
                     exit 0
                 fi
 
-                branch=$(basename "$selected")
+                selected="$worktrees_root/$branch"
                 removed=()
                 skipped_names=()
                 skipped_codes=()
