@@ -135,7 +135,6 @@ zinit light-mode for \
 ### End of Zinit's installer chunk
 zinit light spaceship-prompt/spaceship-prompt
 zinit light zsh-users/zsh-completions
-# Cursor-typing flicker mitigation — see .specs/bugs/ghostty-intrinsic-cursor-blink.md
 ZSH_AUTOSUGGEST_MANUAL_REBIND=1
 ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
 zinit light zsh-users/zsh-autosuggestions
