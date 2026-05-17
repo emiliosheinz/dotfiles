@@ -6,3 +6,9 @@ adjust-cell-height = 20%
 font-thicken = true
 
 macos-titlebar-style = hidden
+
+# Disable terminal-side cursor blink — the cursor follows the active
+# application's DECSCUSR request, and blinks only if the application asks
+# for a blinking variant (which nvim, shells, lazygit, claude do not).
+# Root cause analysis: .specs/bugs/ghostty-intrinsic-cursor-blink.md
+cursor-style-blink = false
