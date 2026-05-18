@@ -212,11 +212,10 @@ case "$MODE" in
             leave)
                 backstage_session="$3"
                 # tmux's #{client_type} is empty for both popup-attached and directly-
-                # attached terminal clients on tmux next-3.7, so we cannot distinguish
-                # them that way. The calling client's parent process is `tmux` iff the
-                # client was spawned by the tmux server itself (display-popup -E), which
-                # is exactly the popup-attach case.
-                # See .specs/bugs/backstage-popup-leave-leaves-zombie-clients.md.
+                # attached terminal clients, so we cannot distinguish them that way.
+                # The calling client's parent process is `tmux` iff the client was
+                # spawned by the tmux server itself (display-popup -E), which is
+                # exactly the popup-attach case.
                 client_pid="${4:-}"
                 [ -z "$client_pid" ] && client_pid=$(tmux display-message -p '#{client_pid}' 2>/dev/null)
                 parent_pid=$(ps -o ppid= -p "$client_pid" 2>/dev/null | tr -d ' ')
