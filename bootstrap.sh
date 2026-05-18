@@ -41,6 +41,7 @@ stow btop
 stow macos
 stow ccstatusline
 stow ghostty
+stow dev
 
 # Utilities
 echo "📦 Installing Utilities"

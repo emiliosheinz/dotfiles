@@ -6,7 +6,27 @@ get_workspaces() {
     tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -v "^backstage-"
 }
 
+resolve_branch() {
+    if [[ -z "$TMUX" ]]; then
+        return 1
+    fi
+    local session
+    session=$(tmux display-message -p '#S' 2>/dev/null)
+    if [[ -z "$session" || "$session" == backstage-* ]]; then
+        return 1
+    fi
+    printf '%s\n' "$session"
+}
+
 case "$MODE" in
+    branch)
+        if branch=$(resolve_branch); then
+            printf '%s\n' "$branch"
+            exit 0
+        fi
+        echo "ws branch: no active branch resolvable. Launch from a workspace pane (tmux session named after the branch) or cd into a worktree under ~/dev/.worktrees/<branch>/." >&2
+        exit 1
+        ;;
     switch)
         result=$(get_workspaces | fzf --print-query --prompt="workspace: ")
 
@@ -57,11 +77,8 @@ case "$MODE" in
         case "$subcommand" in
             switch)
                 branch="${3:-}"
-                if [[ -z "$branch" && -n "$TMUX" ]]; then
-                    session=$(tmux display-message -p '#S')
-                    if [[ "$session" != backstage-* ]]; then
-                        branch="$session"
-                    fi
+                if [[ -z "$branch" ]]; then
+                    branch=$(resolve_branch) || true
                 fi
                 if [[ -z "$branch" ]]; then
                     echo "ws wt switch: branch required. Pass a branch argument (ws wt switch <branch>) or run from inside the workspace session." >&2

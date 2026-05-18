@@ -74,11 +74,39 @@ fi
 # Worktree-aware grant injection. When WORKDIR is inside ~/dev/.worktrees/, git
 # needs to reach the bare repo at ~/dev/<repo>. Emit grants matching the CWD
 # depth:
+#   ~/dev                              → branch-resolver via `ws branch`; deny cross-branch
 #   ~/dev/.worktrees/<branch>          → grant ~/dev (multi-repo feature work)
 #   ~/dev/.worktrees/<branch>/<repo>+  → grant ~/dev/<repo> (single-repo work)
-# Anything outside ~/dev/.worktrees/ falls through with no additional grants.
-readonly WT_ROOT="${HOME_DIR}/dev/.worktrees"
-if [[ "${WORKDIR}" == "${WT_ROOT}"/* ]]; then
+# Anything outside ~/dev or ~/dev/.worktrees/ falls through with no additional grants.
+readonly DEV_DIR="${HOME_DIR}/dev"
+readonly WT_ROOT="${DEV_DIR}/.worktrees"
+readonly WS_BIN="${HOME_DIR}/.local/scripts/ws"
+if [[ "${WORKDIR}" == "${DEV_DIR}" ]]; then
+    # CWD = ~/dev/: resolve active branch via the shared resolver. Failure
+    # (backstage / outside tmux) aborts before any rules are rendered so we
+    # never launch with a degraded grant. `ws branch` writes the recovery
+    # message to stderr, which propagates to our caller via shell.
+    if ! WT_BRANCH=$("${WS_BIN}" branch); then
+        exit 1
+    fi
+
+    if [[ "${WT_BRANCH}" =~ [\"\\] ]]; then
+        print -u2 "sandbox-run: resolved branch contains characters unsafe for sandbox policy injection: ${WT_BRANCH}"
+        exit 1
+    fi
+
+    {
+        printf '\n;; Multi-repo isolation: CWD = %s, active branch = %s\n' "${WORKDIR}" "${WT_BRANCH}"
+        # The default workdir grant above already allowed read+write on the
+        # whole ~/dev subpath. Carve out other branches' worktrees with a
+        # subpath deny (last-match-wins overrides the broad allow), then
+        # narrowly re-allow the active branch's worktree.
+        printf '(deny file-read* file-write* (subpath "%s"))\n' "${WT_ROOT}"
+        printf '(allow file-read* (literal "%s"))\n' "${WT_ROOT}"
+        printf '(allow file-read* (literal "%s/%s"))\n' "${WT_ROOT}" "${WT_BRANCH}"
+        printf '(allow file-read* file-write* (subpath "%s/%s"))\n' "${WT_ROOT}" "${WT_BRANCH}"
+    } >> "${TMPFILE}"
+elif [[ "${WORKDIR}" == "${WT_ROOT}"/* ]]; then
     WT_REL="${WORKDIR#${WT_ROOT}/}"
     local -a wt_parts
     wt_parts=("${(@s:/:)WT_REL}")
@@ -109,6 +137,13 @@ if [[ "${WORKDIR}" == "${WT_ROOT}"/* ]]; then
             printf '(allow file-read* file-write* (subpath "%s"))\n' "${HOME_DIR}/dev/${WT_REPO}"
         fi
     } >> "${TMPFILE}"
+fi
+
+# Debug aid: when SANDBOX_RUN_PRINT_POLICY=1, emit the rendered policy and exit
+# without launching the agent. Used for smoke-testing the rule rendering.
+if [[ -n "${SANDBOX_RUN_PRINT_POLICY:-}" ]]; then
+    cat "${TMPFILE}"
+    exit 0
 fi
 
 # COLUMNS is a zsh-internal variable; export it so subprocesses (Node.js, tput)
