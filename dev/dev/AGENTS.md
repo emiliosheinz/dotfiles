@@ -6,8 +6,9 @@ allowed paths.
 
 ## Launch convention
 
-- Start Claude at `~/dev/` (or at `~/dev/.worktrees/<branch>/`) for any feature
-  that spans more than one repo. Both depths apply the same isolation rules.
+- Start the agent at `~/dev/` (or at `~/dev/.worktrees/<branch>/`) for any
+  feature that spans more than one repo. Both depths apply the same isolation
+  rules. Same wrapper for both agents: `sandbox-run claude` or `sandbox-run opencode`.
 - The "active feature" is encoded in the tmux session name, which equals the
   branch name. Run `ws branch` to print it.
 - Single-repo work continues to launch inside `~/dev/.worktrees/<branch>/<repo>/`
