@@ -207,26 +207,10 @@ case "$MODE" in
                 fi
                 tmux set-option -t "$target" @parent_session "$session_name"
 
-                tmux display-popup -B -w 100% -h 100% -E "tmux attach-session -t '$target'"
+                tmux switch-client -t "$target"
                 ;;
             leave)
                 backstage_session="$3"
-                # tmux's #{client_type} is empty for both popup-attached and directly-
-                # attached terminal clients, so we cannot distinguish them that way.
-                # The calling client's parent process is `tmux` iff the client was
-                # spawned by the tmux server itself (display-popup -E), which is
-                # exactly the popup-attach case.
-                client_pid="${4:-}"
-                [ -z "$client_pid" ] && client_pid=$(tmux display-message -p '#{client_pid}' 2>/dev/null)
-                parent_pid=$(ps -o ppid= -p "$client_pid" 2>/dev/null | tr -d ' ')
-                parent_cmd=$(ps -o comm= -p "$parent_pid" 2>/dev/null | xargs basename 2>/dev/null)
-
-                if [ "$parent_cmd" = "tmux" ]; then
-                    client_tty=$(tmux list-clients -F '#{client_pid} #{client_tty}' \
-                        | awk -v p="$client_pid" '$1==p{print $2; exit}')
-                    [ -n "$client_tty" ] && tmux detach-client -t "$client_tty" || tmux detach-client
-                    exit 0
-                fi
 
                 parent=$(tmux show-options -t "$backstage_session" -qv @parent_session 2>/dev/null)
                 if [ -z "$parent" ] || ! tmux has-session -t "$parent" 2>/dev/null; then
