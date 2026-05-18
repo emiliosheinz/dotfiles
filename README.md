@@ -20,9 +20,10 @@ and writes. `sandbox-run` refuses to launch outside a workspace pane.
 
 Use `ws wt add <repo>` to enlist a repo into the active feature without
 changing your current directory. The agent-facing summary lives at
-`~/dev/AGENTS.md` (with `~/dev/CLAUDE.md` symlinked to it so Claude and
-opencode share the same guidance); see `.specs/multi-repo-claude-isolation/`
-for the design.
+`~/dev/AGENTS.local.md` (with `~/dev/CLAUDE.local.md` symlinked to it so
+Claude and opencode share the same guidance, and the `.local` suffix keeps
+it out of the way of per-project AGENTS.md / CLAUDE.md files); see
+`.specs/multi-repo-claude-isolation/` for the design.
 
 ## Inspiration
 
