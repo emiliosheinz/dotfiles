@@ -31,9 +31,6 @@ allowed paths.
   `~/dev/.worktrees/<active-branch>/<repo>/` without changing CWD. Branch
   defaults to `ws branch`. Use this verb for repo enlistment instead of calling
   `wt` directly.
-- `ws wt switch [branch]` — jump into an existing worktree. Single-repo entry
-  point; not needed when already operating from `~/dev/`.
-- `ws wt remove` — fzf-pick a branch folder and remove its worktrees.
 
 ## When `sandbox-run` refuses to launch
 
