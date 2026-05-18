@@ -10,6 +10,7 @@
 #   ws kill                  fzf-pick a workspace to kill (also kills its backstage sessions)
 #   ws branch                print the active branch (tmux session name); refuses on backstage / outside tmux
 #   ws wt switch [branch]    switch to the worktree for [branch] (defaults to current workspace name)
+#   ws wt add <repo> [branch] materialize a worktree for [branch] in ~/dev/<repo> without changing CWD
 #   ws wt remove             fzf-pick a branch folder under ~/dev/.worktrees and remove every worktree in it
 
 exec tmux-workspace-manager "$@"
