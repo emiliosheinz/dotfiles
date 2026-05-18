@@ -1,50 +1,39 @@
-# Multi-Repo Feature Workflow at `~/dev/`
+# Multi-Repo Workspace at `~/dev/`
 
-You are running inside a multi-repo feature workspace. Read this file before
-touching the filesystem so you use the supported verbs and stay inside the
-allowed paths.
+> **These rules are enforced by the macOS sandbox at the filesystem level.
+> Crossing a boundary fails the tool call. Follow them deliberately — do not
+> retry past a denied read or write, do not bypass, do not try to edit the
+> policy.**
 
-## Launch convention
+## Layout
 
-- The launch point for multi-repo features is `~/dev/`, wrapped by
-  `sandbox-run claude` or `sandbox-run opencode`.
-- The "active feature" is encoded in the tmux session name, which equals the
-  branch name. Run `ws branch` to print it.
-- Single-repo work continues to launch inside `~/dev/.worktrees/<branch>/<repo>/`
-  unchanged.
+- You are running at `~/dev/`. Every repo on the machine is visible here, but
+  source files do not live at this depth — `~/dev/<repo>/` is a bare clone
+  (git metadata only).
+- Code lives under `~/dev/.worktrees/<active-branch>/<repo>/`. That is the
+  worktree for `<repo>` in the current feature. All edits happen there.
+- The "active branch" is the tmux session name and equals the feature name.
+  Run `ws branch` to print it.
 
-## What the sandbox enforces
+## Enlisting a repo
 
-- **Writes allowed**:
+When `<repo>` has no worktree yet for the active branch, run:
+
+```
+ws wt add <repo>
+```
+
+This materializes `~/dev/.worktrees/<active-branch>/<repo>/` without changing
+your current directory. Do not call `wt` directly — `ws wt add` resolves the
+branch and validates the bare repo for you.
+
+## Permissions
+
+- **Writes allowed** on:
   - `~/dev/.worktrees/<active-branch>/**` — your worktrees for this feature.
-  - `~/dev/<repo>/**` — bare-repo metadata only (no source files live here;
-    these writes back `wt switch --create`).
-- **Reads and writes denied**:
-  - `~/dev/.worktrees/<other-branch>/**` — other features are fully invisible.
-- Path-level enforcement is the hard guarantee. This file is defense in depth.
+  - `~/dev/<repo>/**` — bare-repo metadata only; `ws wt add` writes here.
+- **Reads and writes denied** on `~/dev/.worktrees/<other-branch>/**`.
+  Other features are invisible to you. This isolation is intentional.
 
-## Supported verbs
-
-- `ws branch` — print the active branch. Use it before any path-scoped action
-  that needs the branch name.
-- `ws wt add <repo> [branch]` — materialize a worktree for `~/dev/<repo>` at
-  `~/dev/.worktrees/<active-branch>/<repo>/` without changing CWD. Branch
-  defaults to `ws branch`. Use this verb for repo enlistment instead of calling
-  `wt` directly.
-
-## When `sandbox-run` refuses to launch
-
-If launching at `~/dev/` (or `~/dev/.worktrees/<branch>/`) fails with
-"no active branch resolvable", the tmux state cannot supply a branch. Recovery:
-
-1. Launch from a workspace pane (a tmux session whose name is the branch).
-2. Or `cd` into a worktree under `~/dev/.worktrees/<branch>/`.
-
-Backstage sessions (`backstage-*`) and shells outside tmux both refuse — that
-is intentional. Don't try to work around it by editing the policy.
-
-## When the agent gets a permission-denied error
-
-Trust the sandbox. If a write or read into another branch's worktree is
-denied, you crossed the boundary by accident. Re-check the active branch with
-`ws branch` and the path you targeted; do not retry with elevated permissions.
+A permission-denied error means you targeted the wrong path. Re-check the
+active branch with `ws branch` and the path you used.
