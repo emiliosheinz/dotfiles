@@ -7,6 +7,7 @@
 - Concise, direct answers. Lead with the result, not the reasoning.
 - Prefer direct statements over hedging ("This will" not "This might potentially").
 - Do not create README files, architecture docs, or internal module docs unless explicitly asked.
+- Do not add Claude as a co-author on commits or PRs. The commit history should reflect human authorship only.
 
 ## Code Principles
 
@@ -56,12 +57,6 @@
 - Use Glob to find files by pattern — do not speculatively list directories.
 - Read specific files; never read node_modules, .git, or build output directories.
 - Prefer `rg` patterns over reading multiple files when searching for usage.
-
-## Context Management
-
-- Run `/compact` when context usage exceeds ~80% (visible in status line).
-- After `/compact`, re-read only the files actively being modified before continuing.
-- If a task is complete and a new unrelated task starts, suggest `/compact` proactively.
 
 ## Git
 
