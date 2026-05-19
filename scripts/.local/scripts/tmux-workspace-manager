@@ -97,19 +97,24 @@ case "$MODE" in
         subcommand="${2:-}"
         case "$subcommand" in
             switch)
-                branch="${3:-}"
+                shift 2  # drop "wt" and "switch"
+                branch=""
+                if [[ $# -gt 0 && "$1" != -* ]]; then
+                    branch="$1"
+                    shift
+                fi
                 if [[ -z "$branch" ]]; then
                     branch=$(resolve_branch) || true
                 fi
                 if [[ -z "$branch" ]]; then
-                    echo "ws wt switch: branch required. Pass a branch argument (ws wt switch <branch>) or run from inside the workspace session." >&2
+                    echo "ws wt switch: branch required. Pass a branch argument (ws wt switch <branch> [wt-flags...]) or run from inside the workspace session." >&2
                     exit 1
                 fi
 
                 if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
-                    exec wt switch "$branch"
+                    exec wt switch "$@" "$branch"
                 else
-                    exec wt switch --create "$branch"
+                    exec wt switch --create "$@" "$branch"
                 fi
                 ;;
             remove)
@@ -179,10 +184,14 @@ case "$MODE" in
                 fi
                 ;;
             add)
-                repo="${3:-}"
-                branch="${4:-}"
+                shift 2  # drop "wt" and "add"
+                repo=""
+                if [[ $# -gt 0 && "$1" != -* ]]; then
+                    repo="$1"
+                    shift
+                fi
                 if [[ -z "$repo" ]]; then
-                    echo "ws wt add: repo name required. Usage: ws wt add <repo> [branch]" >&2
+                    echo "ws wt add: repo name required. Usage: ws wt add <repo> [branch] [wt-flags...]" >&2
                     exit 1
                 fi
                 repo_path="$HOME/dev/$repo"
@@ -194,16 +203,21 @@ case "$MODE" in
                     echo "ws wt add: $repo_path is not a bare git repository." >&2
                     exit 1
                 fi
+                branch=""
+                if [[ $# -gt 0 && "$1" != -* ]]; then
+                    branch="$1"
+                    shift
+                fi
                 if [[ -z "$branch" ]]; then
                     if ! branch=$(resolve_branch); then
-                        echo "ws wt add: no branch resolvable. Pass an explicit branch (ws wt add $repo <branch>), launch from a workspace pane, or cd into a worktree under ~/dev/.worktrees/<branch>/." >&2
+                        echo "ws wt add: no branch resolvable. Pass an explicit branch (ws wt add $repo <branch> [wt-flags...]), launch from a workspace pane, or cd into a worktree under ~/dev/.worktrees/<branch>/." >&2
                         exit 1
                     fi
                 fi
                 if git -C "$repo_path" show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
-                    exec wt -C "$repo_path" switch --no-cd "$branch"
+                    exec wt -C "$repo_path" switch --no-cd "$@" "$branch"
                 else
-                    exec wt -C "$repo_path" switch --create --no-cd "$branch"
+                    exec wt -C "$repo_path" switch --create --no-cd "$@" "$branch"
                 fi
                 ;;
             *)
