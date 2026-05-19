@@ -6,6 +6,102 @@ get_workspaces() {
     tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -v "^backstage-"
 }
 
+is_branch_shortcut() {
+    # wt branch shortcuts (see https://worktrunk.dev/switch/): they resolve to
+    # existing refs, so they must bypass our --create auto-injection.
+    case "$1" in
+        ^|-|@|pr:*|mr:*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+extract_wt_positionals() {
+    # Walks wt-style args and separates positionals from flags. Knows which wt
+    # flags take a separate value so the value is forwarded with its flag and
+    # not mistaken for a positional. Everything after "--" (wt's EXECUTE_ARGS
+    # separator) is forwarded verbatim.
+    #
+    # Sets globals:
+    #   ws_positionals      array of positional args (in order)
+    #   ws_forwarded_args   array of everything else, including "--" and after
+    ws_positionals=()
+    ws_forwarded_args=()
+    local val_flags=("--base" "-b" "--execute" "-x" "--format" "-C" "--config")
+    local args=("$@") i=0 n=${#args[@]}
+    while [[ $i -lt $n ]]; do
+        local arg="${args[$i]}"
+        if [[ "$arg" == "--" ]]; then
+            ws_forwarded_args+=("${args[@]:$i}")
+            return 0
+        fi
+        local is_val_flag=false vf
+        for vf in "${val_flags[@]}"; do
+            if [[ "$arg" == "$vf" ]]; then
+                is_val_flag=true; break
+            fi
+        done
+        if $is_val_flag; then
+            ws_forwarded_args+=("$arg")
+            i=$((i+1))
+            if [[ $i -lt $n ]]; then
+                ws_forwarded_args+=("${args[$i]}")
+                i=$((i+1))
+            fi
+            continue
+        fi
+        # Any other flag (--base=val, --no-cd, -c, -vv, etc.); bare "-" is a
+        # branch shortcut and falls through to positional.
+        if [[ "$arg" != "-" && "$arg" == -* ]]; then
+            ws_forwarded_args+=("$arg")
+            i=$((i+1))
+            continue
+        fi
+        ws_positionals+=("$arg")
+        i=$((i+1))
+    done
+}
+
+needs_auto_create() {
+    # Usage: needs_auto_create <branch> <repo_path_or_empty> [forwarded args...]
+    # Returns 0 if we should inject --create.
+    local branch="$1" repo_path="$2"
+    shift 2
+    is_branch_shortcut "$branch" && return 1
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            --create|-c) return 1 ;;
+        esac
+    done
+    if [[ -n "$repo_path" ]]; then
+        git -C "$repo_path" show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null && return 1
+    else
+        git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null && return 1
+    fi
+    return 0
+}
+
+split_wt_execute_args() {
+    # Splits args at the first "--" (wt's EXECUTE_ARGS separator).
+    # Sets globals: wt_pre_args, wt_post_args, wt_saw_dashes ("true"/"false").
+    wt_pre_args=()
+    wt_post_args=()
+    wt_saw_dashes=false
+    local arg seen=false
+    for arg in "$@"; do
+        if ! $seen && [[ "$arg" == "--" ]]; then
+            seen=true
+            wt_saw_dashes=true
+            continue
+        fi
+        if $seen; then
+            wt_post_args+=("$arg")
+        else
+            wt_pre_args+=("$arg")
+        fi
+    done
+}
+
 resolve_branch() {
     if [[ -z "$TMUX" ]]; then
         return 1
@@ -98,11 +194,12 @@ case "$MODE" in
         case "$subcommand" in
             switch)
                 shift 2  # drop "wt" and "switch"
-                branch=""
-                if [[ $# -gt 0 && "$1" != -* ]]; then
-                    branch="$1"
-                    shift
+                extract_wt_positionals "$@"
+                if [[ ${#ws_positionals[@]} -gt 1 ]]; then
+                    echo "ws wt switch: unexpected extra positional '${ws_positionals[1]}'. Usage: ws wt switch [<branch>] [wt-flags...]" >&2
+                    exit 1
                 fi
+                branch="${ws_positionals[0]:-}"
                 if [[ -z "$branch" ]]; then
                     branch=$(resolve_branch) || true
                 fi
@@ -111,10 +208,16 @@ case "$MODE" in
                     exit 1
                 fi
 
-                if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
-                    exec wt switch "$@" "$branch"
+                create_flag=()
+                if needs_auto_create "$branch" "" "${ws_forwarded_args[@]}"; then
+                    create_flag=(--create)
+                fi
+
+                split_wt_execute_args "${ws_forwarded_args[@]}"
+                if [[ "$wt_saw_dashes" == "true" ]]; then
+                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$branch" -- "${wt_post_args[@]}"
                 else
-                    exec wt switch --create "$@" "$branch"
+                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$branch"
                 fi
                 ;;
             remove)
@@ -185,13 +288,14 @@ case "$MODE" in
                 ;;
             add)
                 shift 2  # drop "wt" and "add"
-                repo=""
-                if [[ $# -gt 0 && "$1" != -* ]]; then
-                    repo="$1"
-                    shift
+                extract_wt_positionals "$@"
+                if [[ ${#ws_positionals[@]} -gt 2 ]]; then
+                    echo "ws wt add: unexpected extra positional '${ws_positionals[2]}'. Usage: ws wt add <repo> [<branch>] [wt-flags...]" >&2
+                    exit 1
                 fi
+                repo="${ws_positionals[0]:-}"
                 if [[ -z "$repo" ]]; then
-                    echo "ws wt add: repo name required. Usage: ws wt add <repo> [branch] [wt-flags...]" >&2
+                    echo "ws wt add: repo name required. Usage: ws wt add <repo> [<branch>] [wt-flags...]" >&2
                     exit 1
                 fi
                 repo_path="$HOME/dev/$repo"
@@ -203,21 +307,24 @@ case "$MODE" in
                     echo "ws wt add: $repo_path is not a bare git repository." >&2
                     exit 1
                 fi
-                branch=""
-                if [[ $# -gt 0 && "$1" != -* ]]; then
-                    branch="$1"
-                    shift
-                fi
+                branch="${ws_positionals[1]:-}"
                 if [[ -z "$branch" ]]; then
                     if ! branch=$(resolve_branch); then
                         echo "ws wt add: no branch resolvable. Pass an explicit branch (ws wt add $repo <branch> [wt-flags...]), launch from a workspace pane, or cd into a worktree under ~/dev/.worktrees/<branch>/." >&2
                         exit 1
                     fi
                 fi
-                if git -C "$repo_path" show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
-                    exec wt -C "$repo_path" switch --no-cd "$@" "$branch"
+
+                create_flag=()
+                if needs_auto_create "$branch" "$repo_path" "${ws_forwarded_args[@]}"; then
+                    create_flag=(--create)
+                fi
+
+                split_wt_execute_args "${ws_forwarded_args[@]}"
+                if [[ "$wt_saw_dashes" == "true" ]]; then
+                    exec wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$branch" -- "${wt_post_args[@]}"
                 else
-                    exec wt -C "$repo_path" switch --create --no-cd "$@" "$branch"
+                    exec wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$branch"
                 fi
                 ;;
             *)
