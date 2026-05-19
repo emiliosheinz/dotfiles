@@ -66,7 +66,7 @@ case "$MODE" in
             exit 0
         fi
 
-        tmux list-sessions -F "#{session_name}" 2>/dev/null | grep "^backstage-${selected}-" | while read -r session; do
+        tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -E "^backstage-${selected}(-|$)" | while read -r session; do
             tmux kill-session -t "$session"
         done
 
@@ -199,8 +199,7 @@ case "$MODE" in
                 session_name="$3"
                 current_path="$4"
 
-                clean=$(basename "$current_path" | tr -cs '[:alnum:]_-' '-' | tr '[:upper:]' '[:lower:]' | sed 's/-*$//')
-                target="backstage-${session_name}-${clean}"
+                target="backstage-${session_name}"
 
                 if ! tmux has-session -t "$target" 2>/dev/null; then
                     tmux new-session -d -s "$target" -c "$current_path"
