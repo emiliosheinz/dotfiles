@@ -12,8 +12,16 @@ resolve_branch() {
     fi
     local session
     session=$(tmux display-message -p '#S' 2>/dev/null)
-    if [[ -z "$session" || "$session" == backstage-* ]]; then
+    if [[ -z "$session" ]]; then
         return 1
+    fi
+    if [[ "$session" == backstage-* ]]; then
+        local parent
+        parent=$(tmux show-options -t "$session" -qv @parent_session 2>/dev/null)
+        if [[ -z "$parent" ]] || ! tmux has-session -t "$parent" 2>/dev/null; then
+            return 1
+        fi
+        session="$parent"
     fi
     printf '%s\n' "$session"
 }
