@@ -473,6 +473,30 @@
 
 
 ;; ─────────────────────────────────────────────────────────────────────────────
+;; 60-agents: Playwright (MCP browser automation)
+;; Invoked by AI agents through @playwright/mcp; downloads browser binaries
+;; to ~/Library/Caches/ms-playwright on first use and launches them as child
+;; processes. Browser user-data dirs live under /var/folders (already R/W).
+;; ─────────────────────────────────────────────────────────────────────────────
+
+(allow file-read* file-write*
+    (home-subpath "/Library/Caches/ms-playwright")                      ;; Bundled browser binaries (Chromium, Firefox, WebKit) and metadata.
+    (home-subpath "/.cache/ms-playwright")                              ;; XDG-style alternative cache (honored when PLAYWRIGHT_BROWSERS_PATH is unset on Linux-style layouts).
+    (home-subpath "/Library/Caches/ms-playwright-go")                   ;; Driver cache for the Go bindings; harmless on Node-only setups.
+)
+
+;; Chromium probes the system font directories and reads installed-app metadata
+;; during startup; /Library/Fonts and /System/Library are already granted above.
+;; Playwright resolves system browser channels (channel: "chrome") by looking up
+;; bundles under /Applications — metadata-only is sufficient, no execution.
+(allow file-read-metadata
+    (subpath "/Applications/Google Chrome.app")
+    (subpath "/Applications/Microsoft Edge.app")
+    (subpath "/Applications/Firefox.app")
+)
+
+
+;; ─────────────────────────────────────────────────────────────────────────────
 ;; Custom paths: projects, dotfiles, shell tooling
 ;; ─────────────────────────────────────────────────────────────────────────────
 
