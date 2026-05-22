@@ -563,6 +563,11 @@
     (home-subpath "/.config/btop")
 )
 
+;; worktrunk config (read-only tool config).
+(allow file-read*
+    (home-subpath "/.config/worktrunk")
+)
+
 ;; iTerm2 config (read-only; not modified by agents).
 (allow file-read*
     (home-subpath "/.config/iterm2")
