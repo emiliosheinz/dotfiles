@@ -460,7 +460,11 @@
 
 ;; ─────────────────────────────────────────────────────────────────────────────
 ;; 60-agents: Docker CLI
-;; Binary: ~/.homebrew/bin/docker (covered by Homebrew grant above).
+;; Binary: ~/.homebrew/bin/docker (covered by Homebrew grant above) OR
+;;         Docker Desktop install at /Applications/Docker.app/...
+;; /usr/local/bin/docker is a symlink into Docker.app; PATH-based resolution
+;; by bash requires read access on the symlink target so `which docker`
+;; succeeds. process-exec alone isn't enough — bash stats first, then execs.
 ;; Config: ~/.docker — credentials, contexts, buildx state, compose files.
 ;; Daemon: /var/run/docker.sock (symlink → /private/var/run/docker.sock).
 ;; ─────────────────────────────────────────────────────────────────────────────
@@ -469,6 +473,17 @@
     (home-subpath "/.docker")                                           ;; CLI config, credentials, contexts, buildx state.
     (literal "/var/run/docker.sock")                                    ;; Docker daemon socket (symlink).
     (literal "/private/var/run/docker.sock")                            ;; Docker daemon socket (resolved path).
+)
+
+;; Docker Desktop binary payload — read-only.
+;; /usr/local/bin/docker symlinks into this path; PATH lookup (which/type/bash)
+;; stats the target before exec, so read access on the bin/ subpath is required.
+(allow file-read*
+    (subpath "/Applications/Docker.app/Contents/Resources/bin")
+)
+(allow file-read-metadata
+    (literal "/Applications")
+    (subpath "/Applications/Docker.app")
 )
 
 
