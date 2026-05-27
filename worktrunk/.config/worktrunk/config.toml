@@ -1,1 +1,4 @@
 worktree-path = "~/dev/.worktrees/{{ branch | sanitize }}/{{ repo }}"
+
+[pre-start]
+copy-env = "rsync -a --prune-empty-dirs --exclude=node_modules --exclude=.git --include='*/' --include='.env' --include='.env.*' --exclude='*' {{ primary_worktree_path }}/ {{ worktree_path }}/"
