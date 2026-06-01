@@ -104,9 +104,10 @@ split_wt_execute_args() {
 
 remove_worktrees_for_branch() {
     # Runs `wt remove --foreground` for every worktree under
-    # ~/dev/.worktrees/<branch>/. Classifies each result, prints a summary,
-    # and — if any worktree was skipped due to uncommitted changes or kept
-    # because the branch is unmerged — prompts once to re-run those with
+    # ~/dev/.worktrees/<branch>/. Streams a progress line per repo as work
+    # happens so the kill popup isn't blank during the run, and — if any
+    # worktree was skipped due to uncommitted changes or kept because the
+    # branch is unmerged — prompts once to re-run those with
     # --force --force-delete. Finally rmdirs the (now-empty) branch folder.
     #
     # --foreground is required: without it `wt remove` returns before the
@@ -119,71 +120,39 @@ remove_worktrees_for_branch() {
         return 0
     fi
 
-    local removed=()
-    local dirty_repos=() dirty_tails=()
-    local unmerged_repos=() unmerged_tails=()
-    local other_repos=() other_tails=() other_codes=()
-    local repo_dir repo_name output exit_code tail line i
+    local dirty_repos=()
+    local unmerged_repos=()
+    local repo_dir repo_name output exit_code tail line
+
+    echo "ws wt remove: $branch"
 
     while IFS= read -r -d '' repo_dir; do
         [[ -d "$repo_dir" ]] || continue
         repo_name=$(basename "$repo_dir")
+        echo "  - $repo_name: removing..."
         output=$( (cd "$repo_dir" && wt remove --foreground "$branch" </dev/null) 2>&1 )
         exit_code=$?
         tail=$(printf '%s' "$output" | tail -n 3)
         if [[ $exit_code -ne 0 ]]; then
             if printf '%s' "$output" | grep -qi "uncommitted changes"; then
                 dirty_repos+=("$repo_name")
-                dirty_tails+=("$tail")
+                echo "    dirty — uncommitted changes"
             else
-                other_repos+=("$repo_name")
-                other_tails+=("$tail")
-                other_codes+=("$exit_code")
+                echo "    failed (exit $exit_code)"
             fi
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "      $line"
+            done <<< "$tail"
         elif printf '%s' "$output" | grep -qi "branch unmerged"; then
             unmerged_repos+=("$repo_name")
-            unmerged_tails+=("$tail")
+            echo "    unmerged — worktree removed, branch kept"
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "      $line"
+            done <<< "$tail"
         else
-            removed+=("$repo_name")
+            echo "    removed"
         fi
     done < <(find "$selected" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
-
-    echo "ws wt remove: $branch"
-    echo "  removed (${#removed[@]}):"
-    if [[ ${#removed[@]} -eq 0 ]]; then
-        echo "    (none)"
-    else
-        for repo_name in "${removed[@]}"; do
-            echo "    - $repo_name"
-        done
-    fi
-    if [[ ${#dirty_repos[@]} -gt 0 ]]; then
-        echo "  dirty — worktree has uncommitted changes (${#dirty_repos[@]}):"
-        for i in "${!dirty_repos[@]}"; do
-            echo "    - ${dirty_repos[$i]}"
-            while IFS= read -r line; do
-                [[ -n "$line" ]] && echo "        $line"
-            done <<< "${dirty_tails[$i]}"
-        done
-    fi
-    if [[ ${#unmerged_repos[@]} -gt 0 ]]; then
-        echo "  unmerged — worktree removed, branch kept (${#unmerged_repos[@]}):"
-        for i in "${!unmerged_repos[@]}"; do
-            echo "    - ${unmerged_repos[$i]}"
-            while IFS= read -r line; do
-                [[ -n "$line" ]] && echo "        $line"
-            done <<< "${unmerged_tails[$i]}"
-        done
-    fi
-    if [[ ${#other_repos[@]} -gt 0 ]]; then
-        echo "  failed (${#other_repos[@]}):"
-        for i in "${!other_repos[@]}"; do
-            echo "    - ${other_repos[$i]} (exit ${other_codes[$i]})"
-            while IFS= read -r line; do
-                [[ -n "$line" ]] && echo "        $line"
-            done <<< "${other_tails[$i]}"
-        done
-    fi
 
     local need_force=$((${#dirty_repos[@]} + ${#unmerged_repos[@]}))
     if [[ $need_force -gt 0 && -r /dev/tty ]]; then
@@ -191,10 +160,10 @@ remove_worktrees_for_branch() {
         printf '  Force remove %d pending worktree(s) with --force --force-delete? [y/N] ' "$need_force" >&2
         IFS= read -r answer </dev/tty
         if [[ "$answer" == [yY] || "$answer" == [yY][eE][sS] ]]; then
-            local forced_removed=() forced_failed=() forced_failed_tails=() forced_failed_codes=()
             local src
             for repo_name in "${dirty_repos[@]}" "${unmerged_repos[@]}"; do
                 repo_dir="$selected/$repo_name"
+                echo "  - $repo_name: force-removing..."
                 if [[ -d "$repo_dir" ]]; then
                     output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$branch" </dev/null) 2>&1 )
                     exit_code=$?
@@ -210,30 +179,14 @@ remove_worktrees_for_branch() {
                     fi
                 fi
                 if [[ $exit_code -eq 0 ]]; then
-                    forced_removed+=("$repo_name")
+                    echo "    force-removed"
                 else
-                    forced_failed+=("$repo_name")
-                    forced_failed_tails+=("$(printf '%s' "$output" | tail -n 3)")
-                    forced_failed_codes+=("$exit_code")
+                    echo "    force-remove failed (exit $exit_code)"
+                    while IFS= read -r line; do
+                        [[ -n "$line" ]] && echo "      $line"
+                    done <<< "$(printf '%s' "$output" | tail -n 3)"
                 fi
             done
-            echo "  force-removed (${#forced_removed[@]}):"
-            if [[ ${#forced_removed[@]} -eq 0 ]]; then
-                echo "    (none)"
-            else
-                for repo_name in "${forced_removed[@]}"; do
-                    echo "    - $repo_name"
-                done
-            fi
-            if [[ ${#forced_failed[@]} -gt 0 ]]; then
-                echo "  force-remove failed (${#forced_failed[@]}):"
-                for i in "${!forced_failed[@]}"; do
-                    echo "    - ${forced_failed[$i]} (exit ${forced_failed_codes[$i]})"
-                    while IFS= read -r line; do
-                        [[ -n "$line" ]] && echo "        $line"
-                    done <<< "${forced_failed_tails[$i]}"
-                done
-            fi
         fi
     fi
 
