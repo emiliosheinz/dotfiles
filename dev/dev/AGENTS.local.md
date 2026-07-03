@@ -18,10 +18,20 @@ policy._
 
 ## Enlisting a repo
 
-When `<repo>` has no worktree yet for the active branch, run:
+When `<repo>` has no worktree yet for the active branch, first **ask the
+user which base branch to fork from**. Do not guess and do not offer a
+free-form prompt — the correct base varies per repo and per feature.
+
+List the repo's local branches and present them as concrete choices:
 
 ```
-ws wt add <repo>
+git -C ~/dev/<repo> for-each-ref --format='%(refname:short)' refs/heads/
+```
+
+Show that list to the user and ask them to pick one. Then run:
+
+```
+ws wt add <repo> -b <base>
 ```
 
 This materializes `~/dev/.worktrees/<active-branch>/<repo>/` without changing
