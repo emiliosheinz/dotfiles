@@ -198,7 +198,57 @@ remove_worktrees_for_branch() {
     return 1
 }
 
+kill_workspace_worktrees() {
+    # Tears down a workspace: `wt remove --force --force-delete --foreground`
+    # per repo (worktree + local branch, one shot), then wipes the leftover
+    # ~/dev/.worktrees/<branch>/ folder as a backstop. Force is unconditional
+    # — kill is already the "burn it down" verb.
+    #
+    # Preserving .spec/* and pruning empty parent dirs happen in wt's
+    # pre-remove/post-remove hooks (see ~/.config/worktrunk/config.toml).
+    #
+    # --foreground is required: without it `wt remove` returns before the
+    # worktree dir is gone, and the trailing rm loses the race.
+    local branch="$1"
+    local worktrees_root="$HOME/dev/.worktrees"
+    local branch_root="$worktrees_root/$branch"
+    local repo_dir repo_name output exit_code line
+
+    if [[ ! -d "$branch_root" ]]; then
+        return 0
+    fi
+
+    echo "ws kill: $branch"
+
+    echo "  removing worktrees + local branches..."
+    while IFS= read -r -d '' repo_dir; do
+        [[ -d "$repo_dir" ]] || continue
+        repo_name=$(basename "$repo_dir")
+        echo "  - $repo_name: removing..."
+        output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$branch" </dev/null) 2>&1 )
+        exit_code=$?
+        if [[ $exit_code -eq 0 ]]; then
+            echo "    removed"
+        else
+            echo "    failed (exit $exit_code)"
+            while IFS= read -r line; do
+                [[ -n "$line" ]] && echo "      $line"
+            done <<< "$(printf '%s' "$output" | tail -n 3)"
+        fi
+    done < <(find "$branch_root" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
+
+    rm -rf "$branch_root"
+    if [[ ! -d "$branch_root" ]]; then
+        echo "  branch folder: removed"
+    else
+        echo "  branch folder: left in place ($branch_root)"
+    fi
+}
+
 resolve_branch() {
+    # Backstage sessions are named `backstage-<parent>`. Derive the parent by
+    # stripping the prefix — the naming convention survives tmux restore,
+    # whereas the @parent_session user option does not.
     if [[ -z "$TMUX" ]]; then
         return 1
     fi
@@ -208,12 +258,10 @@ resolve_branch() {
         return 1
     fi
     if [[ "$session" == backstage-* ]]; then
-        local parent
-        parent=$(tmux show-options -t "$session" -qv @parent_session 2>/dev/null)
-        if [[ -z "$parent" ]] || ! tmux has-session -t "$parent" 2>/dev/null; then
+        session="${session#backstage-}"
+        if [[ -z "$session" ]] || ! tmux has-session -t "$session" 2>/dev/null; then
             return 1
         fi
-        session="$parent"
     fi
     printf '%s\n' "$session"
 }
@@ -281,7 +329,7 @@ case "$MODE" in
 
         # Clean worktrees first: killing the session that hosts this script
         # would terminate the cleanup mid-run.
-        remove_worktrees_for_branch "$selected"
+        kill_workspace_worktrees "$selected"
 
         tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -E "^backstage-${selected}(-|$)" | while read -r session; do
             tmux kill-session -t "$session"
@@ -296,7 +344,7 @@ case "$MODE" in
                 shift 2  # drop "wt" and "switch"
                 extract_wt_positionals "$@"
                 if [[ ${#ws_positionals[@]} -gt 1 ]]; then
-                    echo "ws wt switch: unexpected extra positional '${ws_positionals[1]}'. Usage: ws wt switch [<branch>] [wt-flags...]" >&2
+                    echo "ws wt switch: unexpected extra positional '${ws_positionals[1]}'. Usage: ws wt switch [<branch>] [-b <base>] [wt-flags...]" >&2
                     exit 1
                 fi
                 branch="${ws_positionals[0]:-}"
@@ -304,7 +352,7 @@ case "$MODE" in
                     branch=$(resolve_branch) || true
                 fi
                 if [[ -z "$branch" ]]; then
-                    echo "ws wt switch: branch required. Pass a branch argument (ws wt switch <branch> [wt-flags...]) or run from inside the workspace session." >&2
+                    echo "ws wt switch: branch required. Pass a branch argument (ws wt switch <branch> [-b <base>] [wt-flags...]) or run from inside the workspace session." >&2
                     exit 1
                 fi
 
@@ -339,12 +387,12 @@ case "$MODE" in
                 shift 2  # drop "wt" and "add"
                 extract_wt_positionals "$@"
                 if [[ ${#ws_positionals[@]} -gt 2 ]]; then
-                    echo "ws wt add: unexpected extra positional '${ws_positionals[2]}'. Usage: ws wt add <repo> [<branch>] [wt-flags...]" >&2
+                    echo "ws wt add: unexpected extra positional '${ws_positionals[2]}'. Usage: ws wt add <repo> [<branch>] [-b <base>] [wt-flags...]" >&2
                     exit 1
                 fi
                 repo="${ws_positionals[0]:-}"
                 if [[ -z "$repo" ]]; then
-                    echo "ws wt add: repo name required. Usage: ws wt add <repo> [<branch>] [wt-flags...]" >&2
+                    echo "ws wt add: repo name required. Usage: ws wt add <repo> [<branch>] [-b <base>] [wt-flags...]" >&2
                     exit 1
                 fi
                 repo_path="$HOME/dev/$repo"
@@ -359,7 +407,7 @@ case "$MODE" in
                 branch="${ws_positionals[1]:-}"
                 if [[ -z "$branch" ]]; then
                     if ! branch=$(resolve_branch); then
-                        echo "ws wt add: no branch resolvable. Pass an explicit branch (ws wt add $repo <branch> [wt-flags...]), launch from a workspace pane, or cd into a worktree under ~/dev/.worktrees/<branch>/." >&2
+                        echo "ws wt add: no branch resolvable. Pass an explicit branch (ws wt add $repo <branch> [-b <base>] [wt-flags...]), launch from a workspace pane, or cd into a worktree under ~/dev/.worktrees/<branch>/." >&2
                         exit 1
                     fi
                 fi
@@ -395,14 +443,18 @@ case "$MODE" in
                 if ! tmux has-session -t "$target" 2>/dev/null; then
                     tmux new-session -d -s "$target" -c "$current_path"
                 fi
-                tmux set-option -t "$target" @parent_session "$session_name"
 
                 tmux switch-client -t "$target"
                 ;;
             leave)
+                # Parent is derived from the `backstage-<parent>` naming
+                # convention so it survives tmux restore (user options do not).
                 backstage_session="$3"
 
-                parent=$(tmux show-options -t "$backstage_session" -qv @parent_session 2>/dev/null)
+                parent=""
+                if [[ "$backstage_session" == backstage-* ]]; then
+                    parent="${backstage_session#backstage-}"
+                fi
                 if [ -z "$parent" ] || ! tmux has-session -t "$parent" 2>/dev/null; then
                     parent=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -v '^backstage-' | head -1)
                 fi

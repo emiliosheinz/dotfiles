@@ -2,3 +2,9 @@ worktree-path = "~/dev/.worktrees/{{ branch | sanitize }}/{{ repo }}"
 
 [pre-start]
 copy-env = "rsync -a --prune-empty-dirs --exclude=node_modules --exclude=.git --include='*/' --include='.env' --include='.env.*' --exclude='*' {{ primary_worktree_path }}/ {{ worktree_path }}/"
+
+[pre-remove]
+save-spec = "if [ -d {{ worktree_path }}/.spec ]; then mkdir -p {{ primary_worktree_path }}/.spec && rsync -a {{ worktree_path }}/.spec/ {{ primary_worktree_path }}/.spec/; fi"
+
+[post-remove]
+prune-branch-dir = "rmdir {{ worktree_path | dirname }} 2>/dev/null || true"
