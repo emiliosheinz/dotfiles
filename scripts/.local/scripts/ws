@@ -6,12 +6,12 @@
 # stripped) before use as a session name.
 #
 # Usage:
-#   ws [switch]              fzf-pick or type a workspace name to switch to (or create)
-#   ws kill                  fzf-pick a workspace to kill (also kills its backstage sessions and removes its worktrees)
-#   ws branch                print the active branch (tmux session name); refuses on backstage / outside tmux
-#   ws wt switch [branch]    switch to the worktree for [branch] (defaults to current workspace name)
-#   ws wt add <repo> [branch] materialize a worktree for [branch] in ~/dev/<repo> without changing CWD
-#   ws wt remove             fzf-pick a branch folder under ~/dev/.worktrees and remove every worktree in it;
-#                            warns on dirty/unmerged worktrees and prompts before retrying with --force --force-delete
+#   ws [switch]                 fzf-pick or type a workspace name to switch to (or create)
+#   ws kill                     fzf-pick a workspace to kill (also kills its backstage sessions and removes its worktrees)
+#   ws workspace                print the active workspace name (tmux session name); refuses on backstage / outside tmux
+#   ws wt switch [workspace]    switch to the worktree for [workspace] (defaults to the active workspace)
+#   ws wt add <repo> [workspace] materialize a worktree for [workspace] in ~/dev/<repo> without changing CWD
+#   ws wt remove                fzf-pick a workspace folder under ~/dev/.worktrees and remove every worktree in it;
+#                               warns on dirty/unmerged worktrees and prompts before retrying with --force --force-delete
 
 exec tmux-workspace-manager "$@"

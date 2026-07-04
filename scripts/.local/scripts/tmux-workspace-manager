@@ -220,10 +220,10 @@ remove_worktrees_for_branch() {
         return 0
     fi
     if rmdir "$selected" 2>/dev/null; then
-        echo "  branch folder: removed"
+        echo "  workspace folder: removed"
         return 0
     fi
-    echo "  branch folder: left in place ($selected)"
+    echo "  workspace folder: left in place ($selected)"
     return 1
 }
 
@@ -292,9 +292,9 @@ kill_workspace_worktrees() {
     if [[ -d "$branch_root" ]]; then
         rm -rf "$branch_root"
         if [[ ! -d "$branch_root" ]]; then
-            echo "  branch folder: removed"
+            echo "  workspace folder: removed"
         else
-            echo "  branch folder: left in place ($branch_root)"
+            echo "  workspace folder: left in place ($branch_root)"
         fi
     fi
 }
@@ -462,12 +462,12 @@ extract_base_branch() {
 require_jq
 
 case "$MODE" in
-    branch)
+    workspace)
         if branch=$(resolve_branch); then
             printf '%s\n' "$branch"
             exit 0
         fi
-        echo "ws branch: no active branch resolvable. Launch from a workspace pane (tmux session named after the branch) or cd into a worktree under ~/dev/.worktrees/<branch>/." >&2
+        echo "ws workspace: no active workspace resolvable. Launch from a workspace pane (tmux session named after the workspace) or cd into a worktree under ~/dev/.worktrees/<workspace>/." >&2
         exit 1
         ;;
     switch)
@@ -543,7 +543,7 @@ case "$MODE" in
                 shift 2  # drop "wt" and "switch"
                 extract_wt_positionals "$@"
                 if [[ ${#ws_positionals[@]} -gt 1 ]]; then
-                    echo "ws wt switch: unexpected extra positional '${ws_positionals[1]}'. Usage: ws wt switch [<branch>] [-b <base>] [wt-flags...]" >&2
+                    echo "ws wt switch: unexpected extra positional '${ws_positionals[1]}'. Usage: ws wt switch [<workspace>] [-b <base>] [wt-flags...]" >&2
                     exit 1
                 fi
                 branch="${ws_positionals[0]:-}"
@@ -551,7 +551,7 @@ case "$MODE" in
                     branch=$(resolve_branch) || true
                 fi
                 if [[ -z "$branch" ]]; then
-                    echo "ws wt switch: branch required. Pass a branch argument (ws wt switch <branch> [-b <base>] [wt-flags...]) or run from inside the workspace session." >&2
+                    echo "ws wt switch: workspace required. Pass a workspace argument (ws wt switch <workspace> [-b <base>] [wt-flags...]) or run from inside a workspace pane." >&2
                     exit 1
                 fi
 
@@ -586,12 +586,12 @@ case "$MODE" in
                 shift 2  # drop "wt" and "add"
                 extract_wt_positionals "$@"
                 if [[ ${#ws_positionals[@]} -gt 2 ]]; then
-                    echo "ws wt add: unexpected extra positional '${ws_positionals[2]}'. Usage: ws wt add <repo> [<branch>] [-b <base>] [wt-flags...]" >&2
+                    echo "ws wt add: unexpected extra positional '${ws_positionals[2]}'. Usage: ws wt add <repo> [<workspace>] [-b <base>] [wt-flags...]" >&2
                     exit 1
                 fi
                 repo="${ws_positionals[0]:-}"
                 if [[ -z "$repo" ]]; then
-                    echo "ws wt add: repo name required. Usage: ws wt add <repo> [<branch>] [-b <base>] [wt-flags...]" >&2
+                    echo "ws wt add: repo name required. Usage: ws wt add <repo> [<workspace>] [-b <base>] [wt-flags...]" >&2
                     exit 1
                 fi
                 repo_path="$HOME/dev/$repo"
@@ -606,7 +606,7 @@ case "$MODE" in
                 branch="${ws_positionals[1]:-}"
                 if [[ -z "$branch" ]]; then
                     if ! branch=$(resolve_branch); then
-                        echo "ws wt add: no branch resolvable. Pass an explicit branch (ws wt add $repo <branch> [-b <base>] [wt-flags...]), launch from a workspace pane, or cd into a worktree under ~/dev/.worktrees/<branch>/." >&2
+                        echo "ws wt add: no workspace resolvable. Pass an explicit workspace (ws wt add $repo <workspace> [-b <base>] [wt-flags...]), launch from a workspace pane, or cd into a worktree under ~/dev/.worktrees/<workspace>/." >&2
                         exit 1
                     fi
                 fi
@@ -637,7 +637,7 @@ case "$MODE" in
                 ;;
             *)
                 echo "ws wt: unknown subcommand: ${subcommand:-<none>}" >&2
-                echo "Usage: ws wt {switch [branch] | add <repo> [branch] | remove}" >&2
+                echo "Usage: ws wt {switch [workspace] | add <repo> [workspace] | remove}" >&2
                 exit 1
                 ;;
         esac
@@ -709,5 +709,10 @@ case "$MODE" in
         if [[ $migrated -eq 0 ]]; then
             echo "ws migrate: no live workspaces to migrate."
         fi
+        ;;
+    *)
+        echo "ws: unknown subcommand: ${MODE}" >&2
+        echo "Usage: ws {switch | kill | workspace | wt <verb> | migrate}" >&2
+        exit 1
         ;;
 esac

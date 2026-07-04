@@ -72,7 +72,7 @@ fi
 } >> "${TMPFILE}"
 
 # Multi-repo isolation injection. Three CWD depths get distinct treatment:
-#   ~/dev                              → branch resolved via `ws branch`; shared isolation block
+#   ~/dev                              → workspace resolved via `ws workspace`; shared isolation block
 #   ~/dev/.worktrees/<branch>          → branch resolved from path; shared isolation block
 #   ~/dev/.worktrees/<branch>/<repo>+  → narrow single-repo grant (~/dev/<repo>)
 # Anything outside ~/dev or ~/dev/.worktrees/ falls through with no extra grants.
@@ -97,11 +97,11 @@ emit_isolation_block() {
 ACTIVE_BRANCH=""
 ACTIVE_REPO=""
 if [[ "${WORKDIR}" == "${DEV_DIR}" ]]; then
-    # CWD = ~/dev/: resolve active branch via the shared resolver. Failure
+    # CWD = ~/dev/: resolve active workspace via the shared resolver. Failure
     # (backstage / outside tmux) aborts before any rules are rendered so we
-    # never launch with a degraded grant. `ws branch` writes the recovery
+    # never launch with a degraded grant. `ws workspace` writes the recovery
     # message to stderr, which propagates to our caller via shell.
-    if ! ACTIVE_BRANCH=$("${WS_BIN}" branch); then
+    if ! ACTIVE_BRANCH=$("${WS_BIN}" workspace); then
         exit 1
     fi
 elif [[ "${WORKDIR}" == "${WT_ROOT}"/* ]]; then
