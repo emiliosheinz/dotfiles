@@ -103,12 +103,13 @@ split_wt_execute_args() {
 }
 
 remove_worktrees_for_branch() {
-    # Runs `wt remove --foreground` for every worktree under
-    # ~/dev/.worktrees/<branch>/. Streams a progress line per repo as work
-    # happens so the kill popup isn't blank during the run, and — if any
-    # worktree was skipped due to uncommitted changes or kept because the
-    # branch is unmerged — prompts once to re-run those with
-    # --force --force-delete. Finally rmdirs the (now-empty) branch folder.
+    # Runs `wt remove --foreground` for every repo in the union of state's
+    # active_repos ∪ subdirs of ~/dev/.worktrees/<branch>/. Streams a progress
+    # line per repo, and — if any worktree was skipped due to uncommitted
+    # changes or kept because the branch is unmerged — prompts once to re-run
+    # those with --force --force-delete. State entries for repos whose
+    # worktree dir is confirmed gone get pruned as we go. Finally rmdirs the
+    # (now-empty) branch folder.
     #
     # --foreground is required: without it `wt remove` returns before the
     # worktree dir is gone, and the trailing rmdir loses the race.
@@ -116,22 +117,45 @@ remove_worktrees_for_branch() {
     local worktrees_root="$HOME/dev/.worktrees"
     local selected="$worktrees_root/$branch"
 
-    if [[ ! -d "$selected" ]]; then
+    local repos_list
+    repos_list=$(
+        {
+            state_list_repos "$branch"
+            [[ -d "$selected" ]] && find "$selected" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null
+        } | awk 'NF && !seen[$0]++'
+    )
+
+    if [[ -z "$repos_list" ]]; then
         return 0
     fi
 
     local dirty_repos=()
     local unmerged_repos=()
-    local repo_dir repo_name output exit_code tail line
+    local repo_dir repo_name output exit_code tail line src
 
     echo "ws wt remove: $branch"
 
-    while IFS= read -r -d '' repo_dir; do
-        [[ -d "$repo_dir" ]] || continue
-        repo_name=$(basename "$repo_dir")
+    while IFS= read -r repo_name; do
+        [[ -z "$repo_name" ]] && continue
+        repo_dir="$selected/$repo_name"
         echo "  - $repo_name: removing..."
-        output=$( (cd "$repo_dir" && wt remove --foreground "$branch" </dev/null) 2>&1 )
-        exit_code=$?
+        if [[ -d "$repo_dir" ]]; then
+            output=$( (cd "$repo_dir" && wt remove --foreground "$branch" </dev/null) 2>&1 )
+            exit_code=$?
+        else
+            # Tracked in state but the worktree dir is gone. Rerun from the
+            # source repo so any lingering local branch also gets cleaned up.
+            src="$HOME/dev/$repo_name"
+            if [[ -d "$src" ]]; then
+                echo "    (worktree dir missing; cleaning via $src)"
+                output=$( wt -C "$src" remove --foreground "$branch" </dev/null 2>&1 )
+                exit_code=$?
+            else
+                echo "    source repo missing at $HOME/dev/$repo_name; dropping from state"
+                state_remove_repo "$branch" "$repo_name"
+                continue
+            fi
+        fi
         tail=$(printf '%s' "$output" | tail -n 3)
         if [[ $exit_code -ne 0 ]]; then
             if printf '%s' "$output" | grep -qi "uncommitted changes"; then
@@ -149,10 +173,12 @@ remove_worktrees_for_branch() {
             while IFS= read -r line; do
                 [[ -n "$line" ]] && echo "      $line"
             done <<< "$tail"
+            [[ ! -d "$repo_dir" ]] && state_remove_repo "$branch" "$repo_name"
         else
             echo "    removed"
+            [[ ! -d "$repo_dir" ]] && state_remove_repo "$branch" "$repo_name"
         fi
-    done < <(find "$selected" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
+    done <<< "$repos_list"
 
     local need_force=$((${#dirty_repos[@]} + ${#unmerged_repos[@]}))
     if [[ $need_force -gt 0 && -r /dev/tty ]]; then
@@ -160,7 +186,6 @@ remove_worktrees_for_branch() {
         printf '  Force remove %d pending worktree(s) with --force --force-delete? [y/N] ' "$need_force" >&2
         IFS= read -r answer </dev/tty
         if [[ "$answer" == [yY] || "$answer" == [yY][eE][sS] ]]; then
-            local src
             for repo_name in "${dirty_repos[@]}" "${unmerged_repos[@]}"; do
                 repo_dir="$selected/$repo_name"
                 echo "  - $repo_name: force-removing..."
@@ -180,6 +205,7 @@ remove_worktrees_for_branch() {
                 fi
                 if [[ $exit_code -eq 0 ]]; then
                     echo "    force-removed"
+                    [[ ! -d "$repo_dir" ]] && state_remove_repo "$branch" "$repo_name"
                 else
                     echo "    force-remove failed (exit $exit_code)"
                     while IFS= read -r line; do
@@ -190,6 +216,9 @@ remove_worktrees_for_branch() {
         fi
     fi
 
+    if [[ ! -d "$selected" ]]; then
+        return 0
+    fi
     if rmdir "$selected" 2>/dev/null; then
         echo "  branch folder: removed"
         return 0
@@ -200,7 +229,7 @@ remove_worktrees_for_branch() {
 
 kill_workspace_worktrees() {
     # Tears down a workspace: `wt remove --force --force-delete --foreground`
-    # per repo (worktree + local branch, one shot), then wipes the leftover
+    # for every repo in the state ∪ filesystem union, then wipes the leftover
     # ~/dev/.worktrees/<branch>/ folder as a backstop. Force is unconditional
     # — kill is already the "burn it down" verb.
     #
@@ -209,24 +238,47 @@ kill_workspace_worktrees() {
     #
     # --foreground is required: without it `wt remove` returns before the
     # worktree dir is gone, and the trailing rm loses the race.
+    #
+    # Note: per-repo state entries aren't pruned here — the caller in the
+    # `kill)` case removes the entire workspace entry once tmux is torn down.
     local branch="$1"
     local worktrees_root="$HOME/dev/.worktrees"
     local branch_root="$worktrees_root/$branch"
-    local repo_dir repo_name output exit_code line
+    local repo_dir repo_name output exit_code line src
 
-    if [[ ! -d "$branch_root" ]]; then
+    local repos_list
+    repos_list=$(
+        {
+            state_list_repos "$branch"
+            [[ -d "$branch_root" ]] && find "$branch_root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null
+        } | awk 'NF && !seen[$0]++'
+    )
+
+    if [[ -z "$repos_list" ]]; then
         return 0
     fi
 
     echo "ws kill: $branch"
 
     echo "  removing worktrees + local branches..."
-    while IFS= read -r -d '' repo_dir; do
-        [[ -d "$repo_dir" ]] || continue
-        repo_name=$(basename "$repo_dir")
+    while IFS= read -r repo_name; do
+        [[ -z "$repo_name" ]] && continue
+        repo_dir="$branch_root/$repo_name"
         echo "  - $repo_name: removing..."
-        output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$branch" </dev/null) 2>&1 )
-        exit_code=$?
+        if [[ -d "$repo_dir" ]]; then
+            output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$branch" </dev/null) 2>&1 )
+            exit_code=$?
+        else
+            src="$HOME/dev/$repo_name"
+            if [[ -d "$src" ]]; then
+                echo "    (worktree dir missing; cleaning via $src)"
+                output=$( wt -C "$src" remove --force --force-delete --foreground "$branch" </dev/null 2>&1 )
+                exit_code=$?
+            else
+                echo "    source repo missing at $HOME/dev/$repo_name; skipping"
+                continue
+            fi
+        fi
         if [[ $exit_code -eq 0 ]]; then
             echo "    removed"
         else
@@ -235,13 +287,15 @@ kill_workspace_worktrees() {
                 [[ -n "$line" ]] && echo "      $line"
             done <<< "$(printf '%s' "$output" | tail -n 3)"
         fi
-    done < <(find "$branch_root" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
+    done <<< "$repos_list"
 
-    rm -rf "$branch_root"
-    if [[ ! -d "$branch_root" ]]; then
-        echo "  branch folder: removed"
-    else
-        echo "  branch folder: left in place ($branch_root)"
+    if [[ -d "$branch_root" ]]; then
+        rm -rf "$branch_root"
+        if [[ ! -d "$branch_root" ]]; then
+            echo "  branch folder: removed"
+        else
+            echo "  branch folder: left in place ($branch_root)"
+        fi
     fi
 }
 
@@ -265,6 +319,147 @@ resolve_branch() {
     fi
     printf '%s\n' "$session"
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# State: ~/.local/state/tmux-workspace-manager/state.json (schema v1).
+# Atomic writes via .tmp + mv. All string inputs pass through --arg to avoid
+# jq filter injection from branch/repo names.
+# ─────────────────────────────────────────────────────────────────────────────
+
+require_jq() {
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "ws: jq is required. Install with 'brew install jq'." >&2
+        exit 1
+    fi
+}
+
+state_file() {
+    printf '%s\n' "$HOME/.local/state/tmux-workspace-manager/state.json"
+}
+
+state_read() {
+    local file
+    file=$(state_file)
+    if [[ -f "$file" ]]; then
+        cat "$file"
+    else
+        printf '{"version":1,"workspaces":{}}\n'
+    fi
+}
+
+state_write() {
+    # stdin: full JSON to write. Refuses empty content so a mid-pipeline jq
+    # failure can't clobber the file.
+    local file tmp input
+    file=$(state_file)
+    mkdir -p "$(dirname "$file")" || return 1
+    input=$(cat)
+    if [[ -z "$input" ]]; then
+        echo "ws state: refusing to write empty content" >&2
+        return 1
+    fi
+    tmp="$file.tmp"
+    printf '%s\n' "$input" > "$tmp" || return 1
+    mv "$tmp" "$file"
+}
+
+state_upsert_workspace() {
+    # Usage: state_upsert_workspace <worktree>
+    local worktree="$1" out
+    out=$(state_read | jq --arg wt "$worktree" '
+        .workspaces[$wt] //= {worktree: $wt, backstage_session: null, active_repos: []}
+    ') || return 1
+    printf '%s\n' "$out" | state_write
+}
+
+state_remove_workspace() {
+    # Usage: state_remove_workspace <worktree>
+    local worktree="$1" out
+    out=$(state_read | jq --arg wt "$worktree" 'del(.workspaces[$wt])') || return 1
+    printf '%s\n' "$out" | state_write
+}
+
+state_set_backstage() {
+    # Usage: state_set_backstage <worktree> <session_or_empty>
+    # Empty session sets backstage_session to null. No-op if the workspace
+    # entry does not exist (avoids materializing bogus workspaces).
+    local worktree="$1" session="$2" out
+    if [[ -z "$session" ]]; then
+        out=$(state_read | jq --arg wt "$worktree" '
+            if .workspaces[$wt] then .workspaces[$wt].backstage_session = null else . end
+        ') || return 1
+    else
+        out=$(state_read | jq --arg wt "$worktree" --arg s "$session" '
+            if .workspaces[$wt] then .workspaces[$wt].backstage_session = $s else . end
+        ') || return 1
+    fi
+    printf '%s\n' "$out" | state_write
+}
+
+state_add_repo() {
+    # Usage: state_add_repo <worktree> <repo> <base_branch_or_empty>
+    # Idempotent: if repo is already listed, only fills a null base_branch;
+    # never overwrites an existing non-null value.
+    local worktree="$1" repo="$2" base="$3" out
+    out=$(state_read | jq --arg wt "$worktree" --arg r "$repo" --arg b "$base" '
+        (if $b == "" then null else $b end) as $base_val
+        | .workspaces[$wt] //= {worktree: $wt, backstage_session: null, active_repos: []}
+        | if any(.workspaces[$wt].active_repos[]; .repo == $r) then
+              .workspaces[$wt].active_repos |= map(
+                  if .repo == $r and .base_branch == null and $base_val != null
+                  then .base_branch = $base_val
+                  else . end
+              )
+          else
+              .workspaces[$wt].active_repos += [{repo: $r, base_branch: $base_val}]
+          end
+    ') || return 1
+    printf '%s\n' "$out" | state_write
+}
+
+state_remove_repo() {
+    # Usage: state_remove_repo <worktree> <repo>
+    local worktree="$1" repo="$2" out
+    out=$(state_read | jq --arg wt "$worktree" --arg r "$repo" '
+        if .workspaces[$wt] then
+            .workspaces[$wt].active_repos |= map(select(.repo != $r))
+        else . end
+    ') || return 1
+    printf '%s\n' "$out" | state_write
+}
+
+state_list_repos() {
+    # Usage: state_list_repos <worktree>. Emits one repo per line.
+    local worktree="$1"
+    state_read | jq -r --arg wt "$worktree" '
+        (.workspaces[$wt].active_repos // []) | .[] | .repo
+    '
+}
+
+extract_base_branch() {
+    # Walks the passed args (typically ws_forwarded_args) and echoes the value
+    # of -b/--base if present. Handles "-b main" / "--base main" and the
+    # "--base=main" form. Sync with val_flags in extract_wt_positionals if
+    # wt's flag spec changes.
+    local args=("$@") i=0 n=${#args[@]} arg
+    while [[ $i -lt $n ]]; do
+        arg="${args[$i]}"
+        case "$arg" in
+            --base=*)
+                printf '%s\n' "${arg#--base=}"
+                return 0
+                ;;
+            -b|--base)
+                i=$((i+1))
+                [[ $i -lt $n ]] && printf '%s\n' "${args[$i]}"
+                return 0
+                ;;
+        esac
+        i=$((i+1))
+    done
+}
+
+require_jq
 
 case "$MODE" in
     branch)
@@ -302,6 +497,8 @@ case "$MODE" in
             exit 0
         fi
 
+        state_upsert_workspace "$session_name"
+
         tmux_running=$(pgrep tmux)
 
         if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
@@ -336,6 +533,8 @@ case "$MODE" in
         done
 
         tmux kill-session -t "$selected"
+
+        state_remove_workspace "$selected"
         ;;
     wt)
         subcommand="${2:-}"
@@ -417,12 +616,24 @@ case "$MODE" in
                     create_flag=(--create)
                 fi
 
+                base_branch=$(extract_base_branch "${ws_forwarded_args[@]}")
+
                 split_wt_execute_args "${ws_forwarded_args[@]}"
+                # Run wt as a child (not exec) so state can be updated after a
+                # successful switch. `--no-cd` is passed anyway, so we're not
+                # dropping any cd directive by giving up the tail call.
                 if [[ "$wt_saw_dashes" == "true" ]]; then
-                    exec wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$branch" -- "${wt_post_args[@]}"
+                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$branch" -- "${wt_post_args[@]}"
                 else
-                    exec wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$branch"
+                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$branch"
                 fi
+                wt_exit=$?
+
+                if [[ $wt_exit -eq 0 ]]; then
+                    state_upsert_workspace "$branch"
+                    state_add_repo "$branch" "$repo" "$base_branch"
+                fi
+                exit $wt_exit
                 ;;
             *)
                 echo "ws wt: unknown subcommand: ${subcommand:-<none>}" >&2
@@ -445,6 +656,9 @@ case "$MODE" in
                 fi
 
                 tmux switch-client -t "$target"
+
+                # No-op if the parent workspace has no state entry yet.
+                state_set_backstage "$session_name" "$target"
                 ;;
             leave)
                 # Parent is derived from the `backstage-<parent>` naming
@@ -461,5 +675,39 @@ case "$MODE" in
                 [ -n "$parent" ] && tmux switch-client -t "$parent" || tmux detach-client
                 ;;
         esac
+        ;;
+    migrate)
+        # Seed the state file from live tmux sessions + ~/dev/.worktrees/.
+        # Idempotent: existing entries are preserved; only missing bits are
+        # filled in. Base branches are unknown at migrate time (recorded as
+        # null); state_add_repo never overwrites a non-null base_branch.
+        worktrees_root="$HOME/dev/.worktrees"
+        migrated=0
+        while IFS= read -r worktree; do
+            [[ -z "$worktree" ]] && continue
+            state_upsert_workspace "$worktree"
+
+            repo_count=0
+            if [[ -d "$worktrees_root/$worktree" ]]; then
+                while IFS= read -r repo_name; do
+                    [[ -z "$repo_name" ]] && continue
+                    state_add_repo "$worktree" "$repo_name" ""
+                    repo_count=$((repo_count + 1))
+                done < <(find "$worktrees_root/$worktree" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null)
+            fi
+
+            backstage_flag="no"
+            if tmux has-session -t "backstage-$worktree" 2>/dev/null; then
+                state_set_backstage "$worktree" "backstage-$worktree"
+                backstage_flag="yes"
+            fi
+
+            echo "migrated: $worktree ($repo_count repos, backstage: $backstage_flag)"
+            migrated=$((migrated + 1))
+        done < <(get_workspaces)
+
+        if [[ $migrated -eq 0 ]]; then
+            echo "ws migrate: no live workspaces to migrate."
+        fi
         ;;
 esac
