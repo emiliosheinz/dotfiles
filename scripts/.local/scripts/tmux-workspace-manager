@@ -102,63 +102,63 @@ split_wt_execute_args() {
     done
 }
 
-remove_worktrees_for_branch() {
-    # Runs `wt remove --foreground` for every repo in the union of state's
-    # active_repos ∪ subdirs of ~/dev/.worktrees/<branch>/. Streams a progress
-    # line per repo, and — if any worktree was skipped due to uncommitted
-    # changes or kept because the branch is unmerged — prompts once to re-run
-    # those with --force --force-delete. State entries for repos whose
-    # worktree dir is confirmed gone get pruned as we go. Finally rmdirs the
-    # (now-empty) branch folder.
+remove_workspace_worktrees() {
+    # Runs `wt remove` for every repo subdirectory under
+    # ~/dev/.worktrees/<workspace>/, then cleans up the workspace folder.
+    # The filesystem is the sole source of truth — a repo without a subdir
+    # here is untouched (any lingering git-side registration is left as
+    # manual cleanup).
+    #
+    # Usage: remove_workspace_worktrees <workspace> <mode>
+    #   mode=kill    unconditional --force --force-delete; no prompt;
+    #                final cleanup is `rm -rf` (kill is the "burn it down" verb).
+    #   mode=remove  soft --foreground first; on dirty/unmerged, prompt once
+    #                to re-run with --force --force-delete; final cleanup is
+    #                `rmdir` (only removes if empty; caller-visible non-zero
+    #                exit if not).
     #
     # --foreground is required: without it `wt remove` returns before the
-    # worktree dir is gone, and the trailing rmdir loses the race.
-    local branch="$1"
+    # worktree dir is gone, and the trailing rm/rmdir loses the race.
+    #
+    # Preserving .spec/* and pruning empty parent dirs happen in wt's
+    # pre-remove/post-remove hooks (see ~/.config/worktrunk/config.toml).
+    local workspace="$1"
+    local mode="$2"
     local worktrees_root="$HOME/dev/.worktrees"
-    local selected="$worktrees_root/$branch"
+    local root="$worktrees_root/$workspace"
 
-    local repos_list
-    repos_list=$(
-        {
-            state_list_repos "$branch"
-            [[ -d "$selected" ]] && find "$selected" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null
-        } | awk 'NF && !seen[$0]++'
-    )
+    local repos_list=""
+    if [[ -d "$root" ]]; then
+        repos_list=$(find "$root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | awk 'NF && !seen[$0]++')
+    fi
 
     if [[ -z "$repos_list" ]]; then
         return 0
     fi
 
-    local dirty_repos=()
-    local unmerged_repos=()
+    local dirty_repos=() unmerged_repos=()
     local repo_dir repo_name output exit_code tail line src
 
-    echo "ws wt remove: $branch"
+    if [[ "$mode" == "kill" ]]; then
+        echo "ws kill: $workspace"
+        echo "  removing worktrees + local branches..."
+    else
+        echo "ws wt remove: $workspace"
+    fi
 
     while IFS= read -r repo_name; do
         [[ -z "$repo_name" ]] && continue
-        repo_dir="$selected/$repo_name"
+        repo_dir="$root/$repo_name"
         echo "  - $repo_name: removing..."
-        if [[ -d "$repo_dir" ]]; then
-            output=$( (cd "$repo_dir" && wt remove --foreground "$branch" </dev/null) 2>&1 )
-            exit_code=$?
+        if [[ "$mode" == "kill" ]]; then
+            output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$workspace" </dev/null) 2>&1 )
         else
-            # Tracked in state but the worktree dir is gone. Rerun from the
-            # source repo so any lingering local branch also gets cleaned up.
-            src="$HOME/dev/$repo_name"
-            if [[ -d "$src" ]]; then
-                echo "    (worktree dir missing; cleaning via $src)"
-                output=$( wt -C "$src" remove --foreground "$branch" </dev/null 2>&1 )
-                exit_code=$?
-            else
-                echo "    source repo missing at $HOME/dev/$repo_name; dropping from state"
-                state_remove_repo "$branch" "$repo_name"
-                continue
-            fi
+            output=$( (cd "$repo_dir" && wt remove --foreground "$workspace" </dev/null) 2>&1 )
         fi
+        exit_code=$?
         tail=$(printf '%s' "$output" | tail -n 3)
         if [[ $exit_code -ne 0 ]]; then
-            if printf '%s' "$output" | grep -qi "uncommitted changes"; then
+            if [[ "$mode" == "remove" ]] && printf '%s' "$output" | grep -qi "uncommitted changes"; then
                 dirty_repos+=("$repo_name")
                 echo "    dirty — uncommitted changes"
             else
@@ -167,136 +167,76 @@ remove_worktrees_for_branch() {
             while IFS= read -r line; do
                 [[ -n "$line" ]] && echo "      $line"
             done <<< "$tail"
-        elif printf '%s' "$output" | grep -qi "branch unmerged"; then
+        elif [[ "$mode" == "remove" ]] && printf '%s' "$output" | grep -qi "branch unmerged"; then
             unmerged_repos+=("$repo_name")
             echo "    unmerged — worktree removed, branch kept"
             while IFS= read -r line; do
                 [[ -n "$line" ]] && echo "      $line"
             done <<< "$tail"
-            [[ ! -d "$repo_dir" ]] && state_remove_repo "$branch" "$repo_name"
         else
             echo "    removed"
-            [[ ! -d "$repo_dir" ]] && state_remove_repo "$branch" "$repo_name"
         fi
     done <<< "$repos_list"
 
-    local need_force=$((${#dirty_repos[@]} + ${#unmerged_repos[@]}))
-    if [[ $need_force -gt 0 && -r /dev/tty ]]; then
-        local answer=""
-        printf '  Force remove %d pending worktree(s) with --force --force-delete? [y/N] ' "$need_force" >&2
-        IFS= read -r answer </dev/tty
-        if [[ "$answer" == [yY] || "$answer" == [yY][eE][sS] ]]; then
-            for repo_name in "${dirty_repos[@]}" "${unmerged_repos[@]}"; do
-                repo_dir="$selected/$repo_name"
-                echo "  - $repo_name: force-removing..."
-                if [[ -d "$repo_dir" ]]; then
-                    output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$branch" </dev/null) 2>&1 )
-                    exit_code=$?
-                else
-                    # Worktree already gone (unmerged case): rerun from source repo to delete the branch.
-                    src="$HOME/dev/$repo_name"
-                    if [[ -d "$src" ]]; then
-                        output=$( wt -C "$src" remove --force --force-delete --foreground "$branch" </dev/null 2>&1 )
+    if [[ "$mode" == "remove" ]]; then
+        local need_force=$((${#dirty_repos[@]} + ${#unmerged_repos[@]}))
+        if [[ $need_force -gt 0 && -r /dev/tty ]]; then
+            local answer=""
+            printf '  Force remove %d pending worktree(s) with --force --force-delete? [y/N] ' "$need_force" >&2
+            IFS= read -r answer </dev/tty
+            if [[ "$answer" == [yY] || "$answer" == [yY][eE][sS] ]]; then
+                for repo_name in "${dirty_repos[@]}" "${unmerged_repos[@]}"; do
+                    repo_dir="$root/$repo_name"
+                    echo "  - $repo_name: force-removing..."
+                    if [[ -d "$repo_dir" ]]; then
+                        output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$workspace" </dev/null) 2>&1 )
                         exit_code=$?
                     else
-                        output="cannot locate source repo at $src"
-                        exit_code=1
+                        # Worktree already gone (unmerged case): rerun from
+                        # source repo to also delete the branch.
+                        src="$HOME/dev/$repo_name"
+                        if [[ -d "$src" ]]; then
+                            output=$( wt -C "$src" remove --force --force-delete --foreground "$workspace" </dev/null 2>&1 )
+                            exit_code=$?
+                        else
+                            output="cannot locate source repo at $src"
+                            exit_code=1
+                        fi
                     fi
-                fi
-                if [[ $exit_code -eq 0 ]]; then
-                    echo "    force-removed"
-                    [[ ! -d "$repo_dir" ]] && state_remove_repo "$branch" "$repo_name"
-                else
-                    echo "    force-remove failed (exit $exit_code)"
-                    while IFS= read -r line; do
-                        [[ -n "$line" ]] && echo "      $line"
-                    done <<< "$(printf '%s' "$output" | tail -n 3)"
-                fi
-            done
+                    if [[ $exit_code -eq 0 ]]; then
+                        echo "    force-removed"
+                    else
+                        echo "    force-remove failed (exit $exit_code)"
+                        while IFS= read -r line; do
+                            [[ -n "$line" ]] && echo "      $line"
+                        done <<< "$(printf '%s' "$output" | tail -n 3)"
+                    fi
+                done
+            fi
         fi
     fi
 
-    if [[ ! -d "$selected" ]]; then
+    if [[ "$mode" == "kill" ]]; then
+        if [[ -d "$root" ]]; then
+            rm -rf "$root"
+            if [[ ! -d "$root" ]]; then
+                echo "  workspace folder: removed"
+            else
+                echo "  workspace folder: left in place ($root)"
+            fi
+        fi
         return 0
     fi
-    if rmdir "$selected" 2>/dev/null; then
+
+    if [[ ! -d "$root" ]]; then
+        return 0
+    fi
+    if rmdir "$root" 2>/dev/null; then
         echo "  workspace folder: removed"
         return 0
     fi
-    echo "  workspace folder: left in place ($selected)"
+    echo "  workspace folder: left in place ($root)"
     return 1
-}
-
-kill_workspace_worktrees() {
-    # Tears down a workspace: `wt remove --force --force-delete --foreground`
-    # for every repo in the state ∪ filesystem union, then wipes the leftover
-    # ~/dev/.worktrees/<branch>/ folder as a backstop. Force is unconditional
-    # — kill is already the "burn it down" verb.
-    #
-    # Preserving .spec/* and pruning empty parent dirs happen in wt's
-    # pre-remove/post-remove hooks (see ~/.config/worktrunk/config.toml).
-    #
-    # --foreground is required: without it `wt remove` returns before the
-    # worktree dir is gone, and the trailing rm loses the race.
-    #
-    # Note: per-repo state entries aren't pruned here — the caller in the
-    # `kill)` case removes the entire workspace entry once tmux is torn down.
-    local branch="$1"
-    local worktrees_root="$HOME/dev/.worktrees"
-    local branch_root="$worktrees_root/$branch"
-    local repo_dir repo_name output exit_code line src
-
-    local repos_list
-    repos_list=$(
-        {
-            state_list_repos "$branch"
-            [[ -d "$branch_root" ]] && find "$branch_root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null
-        } | awk 'NF && !seen[$0]++'
-    )
-
-    if [[ -z "$repos_list" ]]; then
-        return 0
-    fi
-
-    echo "ws kill: $branch"
-
-    echo "  removing worktrees + local branches..."
-    while IFS= read -r repo_name; do
-        [[ -z "$repo_name" ]] && continue
-        repo_dir="$branch_root/$repo_name"
-        echo "  - $repo_name: removing..."
-        if [[ -d "$repo_dir" ]]; then
-            output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$branch" </dev/null) 2>&1 )
-            exit_code=$?
-        else
-            src="$HOME/dev/$repo_name"
-            if [[ -d "$src" ]]; then
-                echo "    (worktree dir missing; cleaning via $src)"
-                output=$( wt -C "$src" remove --force --force-delete --foreground "$branch" </dev/null 2>&1 )
-                exit_code=$?
-            else
-                echo "    source repo missing at $HOME/dev/$repo_name; skipping"
-                continue
-            fi
-        fi
-        if [[ $exit_code -eq 0 ]]; then
-            echo "    removed"
-        else
-            echo "    failed (exit $exit_code)"
-            while IFS= read -r line; do
-                [[ -n "$line" ]] && echo "      $line"
-            done <<< "$(printf '%s' "$output" | tail -n 3)"
-        fi
-    done <<< "$repos_list"
-
-    if [[ -d "$branch_root" ]]; then
-        rm -rf "$branch_root"
-        if [[ ! -d "$branch_root" ]]; then
-            echo "  workspace folder: removed"
-        else
-            echo "  workspace folder: left in place ($branch_root)"
-        fi
-    fi
 }
 
 resolve_branch() {
@@ -428,14 +368,6 @@ state_remove_repo() {
     printf '%s\n' "$out" | state_write
 }
 
-state_list_repos() {
-    # Usage: state_list_repos <worktree>. Emits one repo per line.
-    local worktree="$1"
-    state_read | jq -r --arg wt "$worktree" '
-        (.workspaces[$wt].active_repos // []) | .[] | .repo
-    '
-}
-
 extract_base_branch() {
     # Walks the passed args (typically ws_forwarded_args) and echoes the value
     # of -b/--base if present. Handles "-b main" / "--base main" and the
@@ -562,7 +494,7 @@ case "$MODE" in
 
         # Clean worktrees first: killing the session that hosts this script
         # would terminate the cleanup mid-run.
-        kill_workspace_worktrees "$selected"
+        remove_workspace_worktrees "$selected" kill
 
         tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -E "^backstage-${selected}(-|$)" | while read -r session; do
             tmux kill-session -t "$session"
@@ -619,7 +551,7 @@ case "$MODE" in
                     exit 0
                 fi
 
-                remove_worktrees_for_branch "$branch"
+                remove_workspace_worktrees "$branch" remove
                 exit $?
                 ;;
             add)
