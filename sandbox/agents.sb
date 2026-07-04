@@ -583,13 +583,6 @@
     (home-subpath "/.config/worktrunk")
 )
 
-;; tmux-workspace-manager state — R/W so `ws` invoked from a sandboxed agent
-;; can upsert workspace/repo entries. Contains only workspace metadata
-;; (worktree names, base branches, backstage session name); no secrets.
-(allow file-read* file-write*
-    (home-subpath "/.local/state/tmux-workspace-manager")
-)
-
 ;; iTerm2 config (read-only; not modified by agents).
 (allow file-read*
     (home-subpath "/.config/iterm2")
