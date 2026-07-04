@@ -239,7 +239,7 @@ remove_workspace_worktrees() {
     return 1
 }
 
-resolve_branch() {
+resolve_workspace() {
     # Backstage sessions are named `backstage-<parent>`. Derive the parent by
     # stripping the prefix — the naming convention survives tmux restore,
     # whereas the @parent_session user option does not.
@@ -297,8 +297,8 @@ case "$MODE" in
         exit 0
         ;;
     workspace)
-        if branch=$(resolve_branch); then
-            printf '%s\n' "$branch"
+        if workspace=$(resolve_workspace); then
+            printf '%s\n' "$workspace"
             exit 0
         fi
         echo "ws workspace: no active workspace resolvable. Launch from a workspace pane (tmux session named after the workspace) or cd into a worktree under ~/dev/.worktrees/<workspace>/." >&2
@@ -380,25 +380,25 @@ case "$MODE" in
                     echo "ws wt switch: unexpected extra positional '${ws_positionals[1]}'. Usage: ws wt switch [<workspace>] [-b <base>] [wt-flags...]" >&2
                     exit 1
                 fi
-                branch="${ws_positionals[0]:-}"
-                if [[ -z "$branch" ]]; then
-                    branch=$(resolve_branch) || true
+                workspace="${ws_positionals[0]:-}"
+                if [[ -z "$workspace" ]]; then
+                    workspace=$(resolve_workspace) || true
                 fi
-                if [[ -z "$branch" ]]; then
+                if [[ -z "$workspace" ]]; then
                     echo "ws wt switch: workspace required. Pass a workspace argument (ws wt switch <workspace> [-b <base>] [wt-flags...]) or run from inside a workspace pane." >&2
                     exit 1
                 fi
 
                 create_flag=()
-                if needs_auto_create "$branch" "" "${ws_forwarded_args[@]}"; then
+                if needs_auto_create "$workspace" "" "${ws_forwarded_args[@]}"; then
                     create_flag=(--create)
                 fi
 
                 split_wt_execute_args "${ws_forwarded_args[@]}"
                 if [[ "$wt_saw_dashes" == "true" ]]; then
-                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$branch" -- "${wt_post_args[@]}"
+                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$workspace" -- "${wt_post_args[@]}"
                 else
-                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$branch"
+                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$workspace"
                 fi
                 ;;
             remove)
@@ -408,12 +408,12 @@ case "$MODE" in
                     exit 1
                 fi
 
-                branch=$(find "$worktrees_root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | fzf --prompt="worktree: ")
-                if [[ -z "$branch" ]]; then
+                workspace=$(find "$worktrees_root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | fzf --prompt="worktree: ")
+                if [[ -z "$workspace" ]]; then
                     exit 0
                 fi
 
-                remove_workspace_worktrees "$branch" remove
+                remove_workspace_worktrees "$workspace" remove
                 exit $?
                 ;;
             add)
@@ -437,24 +437,24 @@ case "$MODE" in
                     echo "ws wt add: $repo_path is not a git repository." >&2
                     exit 1
                 fi
-                branch="${ws_positionals[1]:-}"
-                if [[ -z "$branch" ]]; then
-                    if ! branch=$(resolve_branch); then
+                workspace="${ws_positionals[1]:-}"
+                if [[ -z "$workspace" ]]; then
+                    if ! workspace=$(resolve_workspace); then
                         echo "ws wt add: no workspace resolvable. Pass an explicit workspace (ws wt add $repo <workspace> [-b <base>] [wt-flags...]), launch from a workspace pane, or cd into a worktree under ~/dev/.worktrees/<workspace>/." >&2
                         exit 1
                     fi
                 fi
 
                 create_flag=()
-                if needs_auto_create "$branch" "$repo_path" "${ws_forwarded_args[@]}"; then
+                if needs_auto_create "$workspace" "$repo_path" "${ws_forwarded_args[@]}"; then
                     create_flag=(--create)
                 fi
 
                 split_wt_execute_args "${ws_forwarded_args[@]}"
                 if [[ "$wt_saw_dashes" == "true" ]]; then
-                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$branch" -- "${wt_post_args[@]}"
+                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$workspace" -- "${wt_post_args[@]}"
                 else
-                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$branch"
+                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$workspace"
                 fi
                 exit $?
                 ;;
