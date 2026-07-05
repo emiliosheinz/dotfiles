@@ -156,6 +156,17 @@ brew install anomalyco/tap/opencode
 curl -fsSL https://claude.ai/install.sh | bash
 npx get-shit-done-cc@latest --global --opencode --claude
 
+# Install AI Plugins (ponytail + caveman)
+echo "📦 Installing AI Plugins (ponytail + caveman)"
+wait_for_confirmation
+command -v claude >/dev/null 2>&1 || { echo "❌ claude not found on PATH; aborting AI plugins install"; exit 1; }
+command -v opencode >/dev/null 2>&1 || { echo "❌ opencode not found on PATH; aborting AI plugins install"; exit 1; }
+# Ponytail for Claude Code (OpenCode is wired via opencode.json "plugin" array)
+claude plugin marketplace add DietrichGebert/ponytail || true
+claude plugin install ponytail@ponytail || true
+# Caveman for both Claude Code and OpenCode (universal installer)
+curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash
+
 # Apps
 echo "📦 Installing Apps"
 wait_for_confirmation
