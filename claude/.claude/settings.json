@@ -4,5 +4,24 @@
     "command": "npx ccstatusline@latest",
     "padding": 0
   },
-  "skipDangerousModePermissionPrompt": true
+  "enabledPlugins": {
+    "ponytail@ponytail": true,
+    "caveman@caveman": true
+  },
+  "extraKnownMarketplaces": {
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      }
+    },
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    }
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "agentPushNotifEnabled": true
 }
