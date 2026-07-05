@@ -10,7 +10,7 @@
       }
     }
   },
-  "plugin": ["@dietrichgebert/ponytail"],
+  "plugin": ["@dietrichgebert/ponytail", "./plugins/caveman/plugin.js"],
   "mcp": {
     "playwright": {
       "type": "local",
