@@ -10,6 +10,7 @@
       }
     }
   },
+  "plugin": ["@dietrichgebert/ponytail"],
   "mcp": {
     "playwright": {
       "type": "local",
