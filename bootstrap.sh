@@ -166,6 +166,10 @@ claude plugin marketplace add DietrichGebert/ponytail || true
 claude plugin install ponytail@ponytail || true
 # Caveman for both Claude Code and OpenCode (universal installer)
 curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash
+# Caveman's installer atomically renames opencode.json, which replaces the
+# stow symlink with a real file. Re-stow to restore the tracked linkage;
+# caveman is pre-declared in the tracked opencode.json so nothing is lost.
+stow -R opencode
 
 # Apps
 echo "📦 Installing Apps"
