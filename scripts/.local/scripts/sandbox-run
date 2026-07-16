@@ -1,15 +1,41 @@
 #!/usr/bin/env zsh
 # sandbox-run: launch an agent under sandbox-exec.
-# Always renders a temp policy file so SANDBOX_HOME_DIR is substituted with
-# the real HOME, making agents.sb portable across machines (personal, spoke).
-# Always injects ancestor file-read* literals and a file-read* file-write*
-# subpath rule for the CWD, scoping write access to the current project.
+# Builds the full policy in memory and passes it via `sandbox-exec -p`,
+# so there is no temp file to clean up (previous versions leaked one per
+# session because `exec` bypasses the shell's EXIT trap).
+# SANDBOX_HOME_DIR is substituted with the real HOME so agents.sb stays
+# portable across machines (personal, spoke).
+# Ancestor file-read* literals and a file-read* file-write* subpath rule
+# for the CWD are injected on every run, scoping write access to the
+# current project.
 #
-# When the CWD is inside ~/dev/.worktrees/, additional grants are injected so
-# git operations can reach the bare repo at ~/dev/<repo>:
-#   - CWD = ~/dev/.worktrees/<branch>/<repo> (or deeper) → grants ~/dev/<repo>
-#   - CWD = ~/dev/.worktrees/<branch>          → grants ~/dev (multi-repo case)
-# Outside ~/dev/.worktrees/, no extra grants are emitted.
+# Per-CWD extra grants:
+#
+#   CWD = ~/dev
+#     Active workspace resolved via `ws workspace` (aborts if unresolved).
+#     Dev-scope block emitted:
+#       - ~/dev R/W broadly (non-repo files stay writable)
+#       - each git repo directly under ~/dev locked to RO content + R/W .git
+#         (so `git worktree add` from the source repo still works)
+#       - ~/dev/.worktrees subtree denied, then the active workspace tree
+#         is re-allowed R/W
+#     Prevents an agent invoked at ~/dev from editing any repo working tree
+#     or from touching other workspaces' worktrees.
+#
+#   CWD = ~/dev/<repo>
+#     No extra rules. Only the CWD subpath is R/W; sibling repos and the
+#     rest of ~/dev remain outside the sandbox.
+#
+#   CWD = ~/dev/.worktrees/<workspace>
+#     Same dev-scope block as ~/dev (rare fallback for multi-repo workflows
+#     that operate one directory above the repo folder).
+#
+#   CWD = ~/dev/.worktrees/<workspace>/<repo>[/...]
+#     Narrow single-repo injection:
+#       - ~/dev readable (traversal only)
+#       - ~/dev/<repo> RO
+#       - ~/dev/<repo>/.git R/W (worktree + fetch + push metadata)
+#     Sibling repos under ~/dev and other workspaces remain denied.
 #
 # Usage:
 #   sandbox-run claude [args...]
@@ -45,12 +71,6 @@ if [[ ! -x "${AGENT_BIN}" ]]; then
     exit 1
 fi
 
-# Always render to a temp file so SANDBOX_HOME_DIR is replaced with the real HOME.
-TMPFILE="$(mktemp /tmp/sandbox-run-XXXXXX)"
-trap 'rm -f "${TMPFILE}"' EXIT INT TERM
-
-sed "s|SANDBOX_HOME_DIR|${HOME_DIR}|g" "${PROFILE}" > "${TMPFILE}"
-
 # Reject paths that contain characters which would break or inject SBPL syntax.
 # SBPL string literals are delimited by double-quotes; a bare quote or backslash
 # in the path would malform the injected rule or allow rule injection.
@@ -58,41 +78,15 @@ if [[ "${WORKDIR}" =~ [\"\\] ]]; then
     print -u2 "sandbox-run: workdir contains characters unsafe for sandbox policy injection: ${WORKDIR}"
     exit 1
 fi
-{
-    printf '\n;; Runtime workdir: %s\n' "${WORKDIR}"
-    local ancestor=""
-    local -a parts
-    parts=("${(@s:/:)WORKDIR}")
-    for part in "${parts[@]}"; do
-        [[ -z "${part}" ]] && continue
-        ancestor="${ancestor}/${part}"
-        printf '(allow file-read* (literal "%s"))\n' "${ancestor}"
-    done
-    printf '(allow file-read* file-write* (subpath "%s"))\n' "${WORKDIR}"
-} >> "${TMPFILE}"
 
-# Multi-repo isolation injection. Three CWD depths get distinct treatment:
-#   ~/dev                              → workspace resolved via `ws workspace`; shared isolation block
-#   ~/dev/.worktrees/<branch>          → branch resolved from path; shared isolation block
-#   ~/dev/.worktrees/<branch>/<repo>+  → narrow single-repo grant (~/dev/<repo>)
+# Multi-repo isolation resolution. Three CWD depths get distinct treatment:
+#   ~/dev                              → workspace resolved via `ws workspace`; dev-scope block
+#   ~/dev/.worktrees/<branch>          → branch resolved from path; dev-scope block
+#   ~/dev/.worktrees/<branch>/<repo>+  → narrow single-repo grant (~/dev/<repo> RO + .git R/W)
 # Anything outside ~/dev or ~/dev/.worktrees/ falls through with no extra grants.
 readonly DEV_DIR="${HOME_DIR}/dev"
 readonly WT_ROOT="${DEV_DIR}/.worktrees"
 readonly WS_BIN="${HOME_DIR}/.local/scripts/ws"
-
-# Emit the shared multi-repo isolation block: allow writes broadly under ~/dev
-# (for bare-repo metadata access), deny everything under ~/dev/.worktrees, then
-# narrowly re-allow the active branch's worktree. SBPL last-match-wins makes
-# the active branch reachable while other branches' worktrees are sealed off.
-emit_isolation_block() {
-    local branch="$1"
-    printf '\n;; Multi-repo isolation: active branch = %s\n' "${branch}"
-    printf '(allow file-read* file-write* (subpath "%s"))\n' "${DEV_DIR}"
-    printf '(deny file-read* file-write* (subpath "%s"))\n' "${WT_ROOT}"
-    printf '(allow file-read* (literal "%s"))\n' "${WT_ROOT}"
-    printf '(allow file-read* (literal "%s/%s"))\n' "${WT_ROOT}" "${branch}"
-    printf '(allow file-read* file-write* (subpath "%s/%s"))\n' "${WT_ROOT}" "${branch}"
-}
 
 ACTIVE_BRANCH=""
 ACTIVE_REPO=""
@@ -123,29 +117,102 @@ if [[ -n "${ACTIVE_BRANCH}" ]]; then
         print -u2 "sandbox-run: worktree repo component contains characters unsafe for sandbox policy injection: ${ACTIVE_REPO}"
         exit 1
     fi
-
-    {
-        if [[ -n "${ACTIVE_REPO}" ]]; then
-            printf '\n;; Worktree injection: repo-folder CWD %s\n' "${WORKDIR}"
-            printf '(allow file-read* (literal "%s"))\n' "${DEV_DIR}"
-            printf '(allow file-read* (literal "%s/%s"))\n' "${DEV_DIR}" "${ACTIVE_REPO}"
-            printf '(allow file-read* file-write* (subpath "%s/%s"))\n' "${DEV_DIR}" "${ACTIVE_REPO}"
-        else
-            emit_isolation_block "${ACTIVE_BRANCH}"
-        fi
-    } >> "${TMPFILE}"
 fi
+
+# Enumerate direct children of ~/dev that are non-bare git repos.
+# Skip .worktrees (handled separately), bare repos (no .git subdir) and
+# submodule-style .git files. Prints one repo basename per line.
+list_dev_repos() {
+    local dir base
+    for dir in "${DEV_DIR}"/*(/N); do
+        base="${dir:t}"
+        [[ "${base}" == ".worktrees" ]] && continue
+        [[ -d "${dir}/.git" ]] || continue
+        printf '%s\n' "${base}"
+    done
+}
+
+# Emit the shared dev-scope block. Broad R/W on ~/dev keeps non-repo files
+# writable; each repo's working tree is then denied and its .git re-allowed
+# so `git worktree add` and other metadata ops still succeed. Worktrees
+# subtree is denied wholesale, then the active workspace re-allowed.
+# SBPL last-match-wins ensures narrower rules override the broad allow.
+emit_dev_scope() {
+    local branch="$1"
+    local repo
+    printf '\n;; Dev-scope isolation: active workspace = %s\n' "${branch}"
+    printf '(allow file-read* file-write* (subpath "%s"))\n' "${DEV_DIR}"
+
+    while IFS= read -r repo; do
+        [[ -z "${repo}" ]] && continue
+        if [[ "${repo}" =~ [\"\\] ]]; then
+            print -u2 "sandbox-run: ~/dev repo name unsafe for policy injection: ${repo}"
+            exit 1
+        fi
+        printf ';; Repo lockdown: %s\n' "${repo}"
+        printf '(deny file-read* file-write* (subpath "%s/%s"))\n' "${DEV_DIR}" "${repo}"
+        printf '(allow file-read* (subpath "%s/%s"))\n' "${DEV_DIR}" "${repo}"
+        printf '(allow file-read* file-write* (subpath "%s/%s/.git"))\n' "${DEV_DIR}" "${repo}"
+    done < <(list_dev_repos)
+
+    printf ';; Worktrees lockdown\n'
+    printf '(deny file-read* file-write* (subpath "%s"))\n' "${WT_ROOT}"
+    printf '(allow file-read* (literal "%s"))\n' "${WT_ROOT}"
+    printf '(allow file-read* (literal "%s/%s"))\n' "${WT_ROOT}" "${branch}"
+    printf '(allow file-read* file-write* (subpath "%s/%s"))\n' "${WT_ROOT}" "${branch}"
+}
+
+# Emit the narrow single-repo injection for a CWD deep under
+# ~/dev/.worktrees/<workspace>/<repo>. Only the source repo's .git is R/W;
+# the working tree is read-only and the rest of ~/dev stays outside the
+# sandbox (no allow rule ever reaches it).
+emit_worktree_repo_scope() {
+    local repo="$1"
+    printf '\n;; Worktree injection: source repo = %s\n' "${repo}"
+    printf '(allow file-read* (literal "%s"))\n' "${DEV_DIR}"
+    printf '(allow file-read* (subpath "%s/%s"))\n' "${DEV_DIR}" "${repo}"
+    printf '(allow file-read* file-write* (subpath "%s/%s/.git"))\n' "${DEV_DIR}" "${repo}"
+}
+
+# Assemble the full policy in memory (no temp file) so we can hand it to
+# sandbox-exec via -p. Sections: base profile with HOME substituted, per-CWD
+# ancestor + subpath grants, then the multi-repo isolation rules if applicable.
+POLICY=$(
+    sed "s|SANDBOX_HOME_DIR|${HOME_DIR}|g" "${PROFILE}"
+
+    printf '\n;; Runtime workdir: %s\n' "${WORKDIR}"
+    ancestor=""
+    parts=("${(@s:/:)WORKDIR}")
+    for part in "${parts[@]}"; do
+        [[ -z "${part}" ]] && continue
+        ancestor="${ancestor}/${part}"
+        printf '(allow file-read* (literal "%s"))\n' "${ancestor}"
+    done
+    printf '(allow file-read* file-write* (subpath "%s"))\n' "${WORKDIR}"
+
+    if [[ -n "${ACTIVE_BRANCH}" ]]; then
+        if [[ -n "${ACTIVE_REPO}" ]]; then
+            emit_worktree_repo_scope "${ACTIVE_REPO}"
+        else
+            emit_dev_scope "${ACTIVE_BRANCH}"
+        fi
+    fi
+)
 
 # Debug aid: when SANDBOX_RUN_PRINT_POLICY=1, emit the rendered policy and exit
 # without launching the agent. Used for smoke-testing the rule rendering.
 if [[ -n "${SANDBOX_RUN_PRINT_POLICY:-}" ]]; then
-    cat "${TMPFILE}"
+    printf '%s\n' "${POLICY}"
     exit 0
 fi
 
 # COLUMNS is a zsh-internal variable; export it so subprocesses (Node.js, tput)
-# can detect the real terminal width inside the sandbox.
-(( COLUMNS > 0 )) || COLUMNS=$(stty size </dev/tty 2>/dev/null | awk '{print $2}')
+# can detect the real terminal width inside the sandbox. Fall back to 80 if
+# stty fails (non-TTY invocation) so subprocesses never see an empty value.
+if (( ${COLUMNS:-0} == 0 )); then
+    COLUMNS=$(stty size </dev/tty 2>/dev/null | awk '{print $2}')
+    (( ${COLUMNS:-0} > 0 )) || COLUMNS=80
+fi
 export COLUMNS
 
-exec sandbox-exec -f "${TMPFILE}" "${AGENT_BIN}" "$@"
+exec sandbox-exec -p "${POLICY}" "${AGENT_BIN}" "$@"

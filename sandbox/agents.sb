@@ -148,7 +148,6 @@
     (literal "/dev/ptmx")
     (literal "/dev/dtracehelper")
     (regex #"^/dev/tty")
-    (regex #"^/dev/ttys")
     (regex #"^/dev/pty")
 )
 
@@ -164,7 +163,6 @@
     (literal "/dev/tty")
     (literal "/dev/ptmx")
     (regex #"^/dev/tty")
-    (regex #"^/dev/ttys")
     (regex #"^/dev/pty")
 )
 
@@ -380,7 +378,6 @@
 )
 
 (allow file-read-metadata
-    (home-literal "/Library/Keychains")
     (literal "/Library")
     (literal "/Library/Keychains")
 )
@@ -418,7 +415,6 @@
 ;; ~/.local/bin/claude is covered by the read-only ~/.local/bin grant below.
 ;; Agent definitions and skills are denied write in the security overrides section.
 (allow file-read*
-    (home-prefix "/.claude.json.")
     (literal "/Library/Application Support/ClaudeCode/managed-settings.json")
     (literal "/Library/Application Support/ClaudeCode/managed-mcp.json")
     (literal "/Library/Application Support/ClaudeCode/CLAUDE.md")
@@ -482,7 +478,6 @@
     (subpath "/Applications/Docker.app/Contents/Resources/bin")
 )
 (allow file-read-metadata
-    (literal "/Applications")
     (subpath "/Applications/Docker.app")
 )
 
@@ -629,8 +624,6 @@
     (home-subpath "/.kube")
     (home-subpath "/.config/gcloud")
 )
-
-;; macOS Keychain database files are granted above for Claude Code auth.
 
 ;; Browser sensitive data (history, cookies, stored passwords).
 (deny file-read* file-write*
