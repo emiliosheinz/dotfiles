@@ -32,6 +32,15 @@ if command -v btop &> /dev/null; then
   alias htop='btop'
 fi
 
+# tmux — attach to existing session, else start a new one. Pass-through args untouched.
+tmux() {
+  if [[ $# -eq 0 ]]; then
+    command tmux attach 2>/dev/null || command tmux
+  else
+    command tmux "$@"
+  fi
+}
+
 # ws wrapper — propagates worktrunk's cd/exec directives to the caller shell.
 # Mirrors the pattern from `wt config shell init zsh`: pre-create temp files,
 # export the directive env vars, run the command, then apply cd/source here.
