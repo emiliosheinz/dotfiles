@@ -12,7 +12,7 @@ fail=0
 check() { if eval "$2"; then print "ok   $1"; else print "FAIL $1"; fail=1; fi }
 last() { tail -n 1 "${log}" }
 
-post_tool_use='{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"cat ~/.ssh/id_ed25519"},"tool_response":{"stdout":"","stderr":"cat: /Users/x/.ssh/id_ed25519: Operation not permitted","interrupted":false}}'
+post_tool_use='{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"cat ~/.ssh/id_ed25519"},"tool_response":{"stdout":"","stderr":"cat: /private/var/fixture/.ssh/id_ed25519: Operation not permitted","interrupted":false}}'
 print -r -- "${post_tool_use}" | zsh "${hook}"; rc=$?
 check "PostToolUse denial: exit 0" '(( rc == 0 ))'
 check "PostToolUse denial: hook record with cmd" '[[ "$(last | jq -r .src)" == hook && "$(last | jq -r .cmd)" == "cat ~/.ssh/id_ed25519" ]]'
