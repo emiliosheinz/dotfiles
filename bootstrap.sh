@@ -62,6 +62,11 @@ brew install bat
 brew install zoxide
 brew install btop
 
+# Other CLI tools
+echo "📦 Installing Other CLI Tools"
+wait_for_confirmation
+brew install --cask gcloud-cli
+
 echo "🎨 Configuring bat theme"
 if command -v bat &> /dev/null; then
   mkdir -p "$(bat --config-dir)/themes"
@@ -180,6 +185,8 @@ brew install --cask rectangle
 brew install --cask karabiner-elements
 brew install --cask displaylink
 brew install --cask shottr
+brew install --cask twist
+brew install --cask roam
 
 # Fonts 
 echo "📦 Installing Fonts"
@@ -254,7 +261,31 @@ echo "3. Set Screenshots folder as $HOME/Pictures/Screenshots"
 open -a "Shottr"
 wait_for_confirmation
 
+echo "💬 Setting up Twist"
+echo "1. Login to your account"
+echo "2. Enable 'Launch at login'"
+open -a "Twist"
+wait_for_confirmation
+
+echo "🏢 Setting up Roam"
+echo "1. Login to your account"
+open -a "Roam"
+wait_for_confirmation
+
 echo "🔧 Setting up GitHub CLI"
-echo "1. Running 'gh auth login' to authenticate"
+echo "1. Run 'gh auth login' to authenticate"
 echo "2. Follow the prompts to authenticate with GitHub"
 wait_for_confirmation
+
+echo "🧶 Setting up npm"
+echo "1. Run 'yarn npm login' to authenticate"
+echo "2. Follow the prompts to authenticate with npm"
+wait_for_confirmation
+
+echo "📱 Setting up gcloud CLI"
+echo "1. Run 'gcloud auth login' to authenticate"
+echo "2. Follow the prompts to authenticate with your Google account"
+echo "3. Run 'gcloud auth configure-docker europe-west2-docker.pkg.dev --project=circuit-api-284012' to configure Docker authentication for Google Artifact Registry"
+wait_for_confirmation
+
+echo "🎉 Setup complete! Enjoy your new development environment!"
