@@ -1,0 +1,217 @@
+#!/usr/bin/env zsh
+# hostrun-broker: host side of `hostrun`, started by launchd when a marker
+# lands in the shared inbox (design §5). Trusts nothing from inside: the
+# request path comes from the marker name, workspace and workdir from the
+# launcher-written host meta, the deadline from the request file's mtime.
+# Decides storm → auto-approve list → dialog, executes the argv directly
+# (no shell, fixed PATH, stdin /dev/null, 600 s cap), delivers the result by
+# rename into the session queue and appends to the host-only broker log.
+#
+# Seams (host environment only): HOSTRUN_DIALOG (command printing
+# approve|deny|timeout, args: ws, command line, give-up seconds),
+# HOSTRUN_EXEC_TIMEOUT, HOSTRUN_DEADLINE, SANDBOX_STATE_ROOT.
+set -uo pipefail
+zmodload zsh/system
+setopt extended_glob
+
+root="${SANDBOX_STATE_ROOT:-${HOME}/.local/state/agent-sandbox}"
+host="${root}/host"
+inbox="${root}/inbox"
+scratch="${host}/scratch"
+deadline_s="${HOSTRUN_DEADLINE:-30}"
+exec_cap_s="${HOSTRUN_EXEC_TIMEOUT:-600}"
+storm_limit=3
+storm_window_s=600
+capture_cap=$(( 1024 * 1024 ))
+max_request_bytes=$(( 64 * 1024 ))
+umask 077
+mkdir -p "${host}/meta" "${host}/storm" "${scratch}" "${inbox}"
+
+brew_prefix=""
+for p in "${HOME}/.homebrew" /opt/homebrew /usr/local; do
+    [[ -x "${p}/bin/brew" ]] && { brew_prefix="${p}"; break }
+done
+fixed_path="${HOME}/.local/bin:${HOME}/.local/scripts:${brew_prefix:+${brew_prefix}/bin:}/usr/bin:/bin:/usr/sbin:/sbin"
+
+# One broker at a time; launchd serialises, this guards manual runs.
+exec {lock_fd}>"${host}/broker.lock"
+zsystem flock -t 0 -f "${lock_fd}" "${host}/broker.lock" 2>/dev/null || exit 0
+
+log_record() {
+    # log_record <sid> <ws> <cmdline> <decision> <rc>
+    jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg sid "$1" --arg ws "$2" --arg cmd "$3" \
+        --arg decision "$4" --argjson rc "$5" \
+        '{ts: $ts, src: "broker", session: $sid, ws: $ws, cmd: $cmd, decision: $decision, rc: $rc}' \
+        >> "${host}/broker.jsonl"
+}
+
+# Regular, non-symlink file check (every open in the broker is no-follow).
+regular() { [[ -f "$1" && ! -L "$1" ]] }
+
+storm_active() {
+    local f="${host}/storm/$1" count last
+    regular "${f}" || return 1
+    read -r count last < "${f}" || return 1
+    (( count >= storm_limit && $(date +%s) - last < storm_window_s ))
+}
+storm_bump() {
+    local f="${host}/storm/$1" count=0 last=0 now=$(date +%s)
+    if regular "${f}"; then read -r count last < "${f}"; fi
+    (( now - last > storm_window_s )) && count=0
+    print -r -- "$(( count + 1 )) ${now}" > "${f}.tmp" && mv -f "${f}.tmp" "${f}"
+}
+storm_reset() { rm -f "${host}/storm/$1" }
+
+# Auto-approve: one anchored ERE per line, `#` comments. Unreadable file or
+# any pattern that fails to compile disables auto-approval (fail closed).
+auto_match() {
+    local cmdline="$1" list="${host}/auto-approve" line matched=1
+    regular "${list}" || return 1
+    local -a patterns
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        [[ -z "${line}" || "${line}" == \#* ]] && continue
+        [[ "${line}" == \^*\$ ]] || return 1
+        { [[ "" =~ ${line} ]] } 2>/dev/null
+        (( $? == 2 )) && return 1
+        patterns+=("${line}")
+    done < "${list}"
+    for line in "${patterns[@]}"; do
+        [[ "${cmdline}" =~ ${line} ]] && matched=0
+    done
+    return ${matched}
+}
+
+# Dialog seam: prints approve | deny | timeout. Default uses osascript with
+# the body passed as script arguments, never interpolated into the source.
+osascript_dialog() {
+    local ws="$1" cmdline="$2" give_up="$3" out rc
+    out=$(osascript \
+        -e 'on run argv' \
+        -e 'set ws to item 1 of argv' \
+        -e 'set cmd to item 2 of argv' \
+        -e 'set t to (item 3 of argv) as integer' \
+        -e 'set r to display dialog "Workspace: " & ws & return & return & cmd with title "hostrun" buttons {"Deny", "Approve"} default button "Deny" cancel button "Deny" giving up after t' \
+        -e 'if gave up of r then return "timeout"' \
+        -e 'return "approve"' \
+        -e 'end run' -- "${ws}" "${cmdline}" "${give_up}" 2>&1); rc=$?
+    if (( rc == 0 )); then
+        case "${out}" in approve|timeout) print "${out}"; return 0 ;; esac
+    elif [[ "${out}" == *-128* ]]; then
+        print deny; return 0
+    fi
+    print timeout
+}
+ask_dialog() {
+    local ws="$1" cmdline="$2" give_up="$3" answer
+    cmdline="${cmdline//[[:cntrl:]]/}"
+    cmdline="${cmdline[1,1000]}"
+    if [[ -n "${HOSTRUN_DIALOG:-}" ]]; then
+        answer=$("${HOSTRUN_DIALOG}" "${ws}" "${cmdline}" "${give_up}" 2>/dev/null) || answer=timeout
+    else
+        answer=$(osascript_dialog "${ws}" "${cmdline}" "${give_up}")
+    fi
+    case "${answer}" in approve|deny) print "${answer}" ;; *) print timeout ;; esac
+}
+
+# execute <workdir> <ws> <out> <err> <argv...>; sets exec_rc
+execute() {
+    local workdir="$1" ws="$2" out="$3" err="$4" pid watchdog
+    shift 4
+    ( cd "${workdir}" 2>/dev/null || exit 126
+      exec env -i PATH="${fixed_path}" HOME="${HOME}" WS_WORKSPACE="${ws}" "$@" ) </dev/null >"${out}" 2>"${err}" &
+    pid=$!
+    ( sleep "${exec_cap_s}"; kill -KILL "${pid}" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
+    watchdog=$!
+    wait "${pid}"; exec_rc=$?
+    pkill -P "${watchdog}" 2>/dev/null; kill "${watchdog}" 2>/dev/null; wait "${watchdog}" 2>/dev/null
+    (( exec_rc == 137 )) && exec_rc=124
+}
+
+deliver() {
+    # deliver <sid> <rid> <decision> <rc> <outfile|""> <errfile|"">
+    local sid="$1" rid="$2" decision="$3" rc="$4" out="$5" err="$6"
+    local tmp="${scratch}/${rid}.result" truncated=""
+    if [[ -n "${out}" ]] && (( $(stat -f %z "${out}") > capture_cap )); then truncated="[hostrun: output truncated at 1 MB]"; fi
+    if [[ -n "${err}" ]] && (( $(stat -f %z "${err}") > capture_cap )); then truncated="[hostrun: output truncated at 1 MB]"; fi
+    jq -n --arg rid "${rid}" --arg decision "${decision}" --argjson rc "${rc}" \
+        --rawfile stdout <(head -c "${capture_cap}" "${out:-/dev/null}") \
+        --rawfile stderr <(head -c "${capture_cap}" "${err:-/dev/null}") --arg trunc "${truncated}" \
+        '{rid: $rid, decision: $decision, rc: $rc, stdout: $stdout, stderr: ($stderr + (if $trunc == "" then "" else "\n" + $trunc end))}' > "${tmp}"
+    if ! mv -f "${tmp}" "${root}/sessions/${sid}/results/${rid}.json" 2>/dev/null; then
+        rm -f "${tmp}"
+        return 1
+    fi
+}
+
+process() {
+    local marker="$1" name="${1:t}" sid rid meta request ws workdir decision rc cmdline
+    local -a argv
+    rm -f "${marker}"
+    sid="${name%%.*}"; rid="${name#*.}"
+    if [[ "${sid}" != <->-<->(-<->)# || "${rid}" != <->-<->-<-> ]]; then
+        log_record "${sid}" "" "" invalid 126; return
+    fi
+    meta="${host}/meta/${sid}.json"
+    request="${root}/sessions/${sid}/requests/${rid}.json"
+    if ! regular "${meta}"; then log_record "${sid}" "" "" invalid 126; return; fi
+    ws=$(jq -r '.ws // ""' "${meta}"); workdir=$(jq -r '.workdir // ""' "${meta}")
+    if ! regular "${request}" || (( $(stat -f %z "${request}") > max_request_bytes )); then
+        log_record "${sid}" "${ws}" "" invalid 126; deliver "${sid}" "${rid}" invalid 126 "" ""; return
+    fi
+    local deadline=$(( $(stat -f %m "${request}") + deadline_s ))
+    # Snapshot: the request is read once into memory; the file is never reused.
+    local snapshot
+    snapshot=$(<"${request}")
+    # One argv element per line; empty-string arguments are not supported.
+    argv=("${(@f)$(print -r -- "${snapshot}" | jq -r --arg sid "${sid}" 'select(.sid == $sid) | .argv | select(type == "array" and length > 0 and all(type == "string")) | .[]' 2>/dev/null)}")
+    argv=("${(@)argv:#}")
+    if (( ${#argv} == 0 )); then
+        rm -f "${request}"
+        log_record "${sid}" "${ws}" "" invalid 126; deliver "${sid}" "${rid}" invalid 126 "" ""; return
+    fi
+    cmdline="${(j: :)${(@q-)argv}}"
+
+    if storm_active "${sid}"; then
+        decision=storm; rc=126
+    elif (( $(date +%s) >= deadline )); then
+        decision=timeout; rc=124
+    elif auto_match "${cmdline}" 2>/dev/null; then
+        decision=auto
+    else
+        local give_up=$(( deadline - $(date +%s) ))
+        (( give_up < 5 )) && give_up=5
+        case "$(ask_dialog "${ws:-${workdir}}" "${cmdline}" "${give_up}")" in
+            approve) decision=approved ;;
+            deny) decision=denied; rc=126 ;;
+            *) decision=timeout; rc=124 ;;
+        esac
+        if [[ "${decision}" == approved ]] && (( $(date +%s) >= deadline )); then
+            decision=timeout; rc=124
+        fi
+    fi
+
+    local out="" err=""
+    if [[ "${decision}" == auto || "${decision}" == approved ]]; then
+        out="${scratch}/${rid}.out"; err="${scratch}/${rid}.err"
+        execute "${workdir}" "${ws}" "${out}" "${err}" "${argv[@]}"
+        rc=${exec_rc}
+    fi
+    rm -f "${request}"
+    if ! deliver "${sid}" "${rid}" "${decision}" "${rc}" "${out}" "${err}"; then
+        decision=interrupted
+    fi
+    rm -f "${out}" "${err}"
+    log_record "${sid}" "${ws}" "${cmdline}" "${decision}" "${rc}"
+    case "${decision}" in
+        denied|timeout) storm_bump "${sid}" ;;
+        approved) storm_reset "${sid}" ;;
+    esac
+}
+
+# Orphans from a killed broker.
+find "${scratch}" -type f -mmin +10 -delete 2>/dev/null
+while :; do
+    markers=("${inbox}"/*(N.on))
+    (( ${#markers} )) || { sleep 1; markers=("${inbox}"/*(N.on)); (( ${#markers} )) || break }
+    for m in "${markers[@]}"; do process "${m}"; done
+done

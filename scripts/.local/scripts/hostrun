@@ -1,0 +1,70 @@
+#!/usr/bin/env zsh
+# hostrun <command> [args...]: ask the host to run a non-interactive command
+# outside the sandbox (SBOX-30). The request goes into this session's own
+# queue plus an empty marker in the shared inbox; the launchd broker decides
+# (auto-approve list, storm guard, or a dialog) and delivers the result by
+# rename. Exit codes: the command's own; 126 denied/storm/invalid; 124 timed
+# out; 127 broker not installed.
+set -uo pipefail
+
+root="${SANDBOX_STATE_ROOT:-${HOME}/.local/state/agent-sandbox}"
+plist="${HOSTRUN_PLIST:-${HOME}/Library/LaunchAgents/local.hostrun.plist}"
+deadline_s="${HOSTRUN_DEADLINE:-30}"
+wake_grace_s=15
+max_request_bytes=$(( 64 * 1024 ))
+
+if (( $# == 0 )); then
+    print -u2 'usage: hostrun <command> [args...]'
+    exit 2
+fi
+if [[ -z "${SANDBOX_SESSION_ID:-}" ]]; then
+    print -u2 'hostrun: not inside a sandbox session'
+    exit 2
+fi
+if [[ ! -r "${plist}" ]]; then
+    print -u2 'hostrun: host broker not installed'
+    exit 127
+fi
+
+sid="${SANDBOX_SESSION_ID}"
+queue="${root}/sessions/${sid}"
+rid="$(date +%s)-$$-${RANDOM}"
+request="${queue}/requests/${rid}.json"
+result="${queue}/results/${rid}.json"
+marker="${root}/inbox/${sid}.${rid}"
+
+now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+body=$(jq -nc --arg sid "${sid}" --arg rid "${rid}" --arg now "${now}" --argjson dl "${deadline_s}" \
+    --args '{sid: $sid, rid: $rid, argv: $ARGS.positional, submitted: $now, deadline: ($now | fromdate + $dl | todate)}' -- "$@")
+if (( ${#body} > max_request_bytes )); then
+    print -u2 'hostrun: request too large'
+    exit 126
+fi
+print -r -- "${body}" > "${request}.tmp" && mv -f "${request}.tmp" "${request}" || { print -u2 'hostrun: cannot write request'; exit 126 }
+: > "${marker}"
+
+cleanup() { rm -f "${request}" "${result}" "${marker}" }
+trap cleanup EXIT
+
+limit=$(( SECONDS + deadline_s + wake_grace_s ))
+while [[ ! -f "${result}" ]]; do
+    if (( SECONDS >= limit )); then
+        print -u2 'hostrun: timed out'
+        exit 124
+    fi
+    sleep 0.2
+done
+
+decision=$(jq -r '.decision // "invalid"' "${result}" 2>/dev/null)
+rc=$(jq -r '.rc // 126' "${result}" 2>/dev/null)
+case "${decision}" in
+    auto|approved)
+        jq -rj '.stdout // ""' "${result}"
+        jq -rj '.stderr // ""' "${result}" >&2
+        ;;
+    denied) print -u2 'hostrun: denied'; rc=126 ;;
+    timeout) print -u2 'hostrun: timed out'; rc=124 ;;
+    storm) print -u2 'hostrun: storm guard active'; rc=126 ;;
+    *) print -u2 "hostrun: request rejected (${decision})"; rc=126 ;;
+esac
+exit "${rc}"
