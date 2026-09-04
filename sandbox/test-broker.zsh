@@ -86,6 +86,10 @@ submit "${S2}" "${tmp}/r7" /usr/bin/true
 check "auto match: no dialog, rc 0, decision auto" '[[ "$(cat "${tmp}/r7.rc")" == 0 && "$(calls)" == "$n" ]] && [[ "$(broker_log | tail -1 | jq -r .decision)" == auto ]]'
 submit "${S2}" "${tmp}/r7b" /usr/bin/true extra
 check "anchored: /usr/bin/true extra does not auto-match (dialog called)" '[[ "$(calls)" == $((n+1)) ]]'
+printf '^/bin/echo [a-z]+$\n' > "${root}/host/auto-approve"
+n=$(calls)
+submit "${S2}" "${tmp}/r7c" /bin/echo hello
+check "pattern with variable content matches the command line (not the reverse)" '[[ "$(cat "${tmp}/r7c.out")" == hello && "$(calls)" == "$n" ]] && [[ "$(broker_log | tail -1 | jq -r .decision)" == auto ]]'
 printf '^open https://[^ ]+$\n^/usr/bin/tru(e$\n' > "${root}/host/auto-approve"
 n=$(calls); answer approve
 submit "${S2}" "${tmp}/r8" /usr/bin/true
@@ -140,6 +144,16 @@ head -c 70000 /dev/zero | tr '\0' 'a' > "${root}/sessions/${S1}/requests/3-3-3.j
 zsh "${broker}"
 check "oversize request: invalid, request file removed" '[[ "$(jq -r .decision "${root}/sessions/${S1}/results/3-3-3.json")" == invalid && ! -e "${root}/sessions/${S1}/requests/3-3-3.json" ]]'
 rm -f "${root}/sessions/${S1}/results/3-3-3.json"
+printf '^/usr/bin/true$\n' > "${root}/host/auto-approve"
+req="${root}/sessions/${S1}/requests/4-4-4.json"
+jq -nc --arg sid "${S1}" '{sid:$sid, rid:"4-4-4", argv:["/usr/bin/true"], pad:""}' > "${req}"
+pad=$(( 64 * 1024 - $(stat -f %z "${req}") ))
+jq -nc --arg sid "${S1}" --arg pad "$(head -c "${pad}" /dev/zero | tr '\0' a)" '{sid:$sid, rid:"4-4-4", argv:["/usr/bin/true"], pad:$pad}' > "${req}"
+req_size=$(stat -f %z "${req}")
+: > "${root}/inbox/${S1}.4-4-4"
+zsh "${broker}"
+check "request of exactly 64 KiB is accepted" '(( req_size == 64 * 1024 )) && [[ "$(broker_log | tail -1 | jq -r .decision)" == auto && "$(broker_log | tail -1 | jq -r .cmd)" == /usr/bin/true ]]'
+rm -f "${root}/sessions/${S1}/results/4-4-4.json"
 # result path pre-planted as a symlink: replaced by rename, target untouched
 print planted > "${tmp}/target.txt"
 jq -n --arg sid "${S1}" '{sid:$sid, rid:"4-4-4", argv:["/usr/bin/true"]}' > "${root}/sessions/${S1}/requests/4-4-4.json"

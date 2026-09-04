@@ -22,6 +22,7 @@ kernel() { print -r -- "{\"ts\":\"$1\",\"src\":\"kernel\",\"session\":\"$2\",\"w
     kernel "${now}" s1 11 file-read-data /a
     kernel "${now}" s1 11 file-read-data /a
     kernel "${now}" s1 12 file-read-data /b
+    kernel "$(date -u -v-1M +%FT%TZ)" s1 12 file-read-data /b
     for i in {1..12}; do kernel "${now}" s1 $((100+i)) file-write-create "/p${i}"; done
     print -r -- '{"ts":"'"${now}"'","src":"hook","session":"s1","ws":"w","cmd":"tmux ls","snippet":"x"}'
     print -r -- '{"ts":"'"${now}"'","src":"hook","session":"s1","ws":"w","cmd":"tmux ls","snippet":"x"}'
@@ -41,7 +42,7 @@ check "report exits 0" '(( rc == 0 ))'
 check "four sections in order" '[[ "$out" == *"## Kernel"*"## Agent-visible"*"## Notes"*"## Broker"* ]]'
 check "kernel duplicates counted once (same line, other session)" '[[ "$(print -r -- "$out" | grep -E "^ +1 +file-read-data +/a$" | wc -l | tr -d " ")" == 1 ]]'
 check "kernel section capped at 10 rows" '(( $(print -r -- "$out" | sed -n "/## Kernel/,/## Agent/p" | grep -c "^ *[0-9]") == 10 ))'
-check "count desc then path asc: /a before /b, both before /p*" '[[ "$(print -r -- "$out" | grep -E "^ +1 +file-read" | head -2 | awk "{print \$3}" | tr "\n" " ")" == "/a /b " ]]'
+check "count desc then path asc: /b (2) before /a (1), both before /p*" '[[ "$(print -r -- "$out" | grep -E "^ +[0-9]+ +file-read" | head -2 | awk "{print \$1 \$3}" | tr "\n" " ")" == "2/b 1/a " ]]'
 check "hook commands grouped by count" '[[ "$(print -r -- "$out" | grep -E "^ +2 +tmux ls$" | wc -l | tr -d " ")" == 1 ]]'
 hook_lines=("${(@f)$(print -r -- "$out" | sed -n "/## Agent-visible/,/## Notes/p" | grep "^ *[0-9]")}")
 check "hook section capped at 10 rows, count desc then cmd asc" '(( ${#hook_lines} == 10 )) && [[ "${hook_lines[1]}" == *"tmux ls" && "${hook_lines[2]}" == *"cat "* && "${hook_lines[3]}" == *cmd01 && "${hook_lines[10]}" == *cmd08 ]]'
