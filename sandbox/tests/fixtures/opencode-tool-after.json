@@ -1,0 +1,14 @@
+{
+  "_source": "shape per @opencode-ai/plugin 1.14.48 dist/index.d.ts `tool.execute.after`",
+  "input": {
+    "tool": "bash",
+    "sessionID": "ses_fixture",
+    "callID": "call_fixture",
+    "args": { "command": "cat ~/.ssh/id_ed25519", "description": "Read the ssh key" }
+  },
+  "output": {
+    "title": "cat ~/.ssh/id_ed25519",
+    "output": "cat: /private/var/fixture/.ssh/id_ed25519: Operation not permitted\n",
+    "metadata": { "exit": 1, "description": "Read the ssh key" }
+  }
+}

@@ -10,13 +10,18 @@
       }
     }
   },
-  "plugin": ["@dietrichgebert/ponytail", "./plugins/caveman/plugin.js"],
+  "plugin": [
+    "@dietrichgebert/ponytail",
+    "./plugins/caveman/plugin.js",
+    "./plugins/sandbox-denials/plugin.js"
+  ],
   "mcp": {
     "playwright": {
       "type": "local",
       "command": [
         "npx",
-        "@playwright/mcp@latest"
+        "@playwright/mcp@latest",
+        "--no-sandbox"
       ],
       "enabled": false
     },

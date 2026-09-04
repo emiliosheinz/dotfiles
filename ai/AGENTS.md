@@ -36,6 +36,14 @@
 - Homebrew prefix: `~/.homebrew`.
 - Aliases that affect scripted behavior: `cat` → bat, `cd` → zoxide, `ls`/`ll`/`la`/`lt` → eza.
 
+## Sandbox 
+
+- You run under a macOS sandbox scoped to the launch directory and the active workspace. `ps`, `pgrep`, `kill`, Homebrew reads, `gh`, `git push`, the Playwright MCP, Chrome (`--no-sandbox`) and the Docker CLI work directly.
+- Host-only actions go through `hostrun <command>`: `open <url>`, `brew install`, `hostrun open -a Docker` to start Docker Desktop. `ws` verbs route themselves. `open https://…` and `ws wt add` run without approval; everything else prompts the user and times out after 30 s.
+- `hostrun` is non-interactive: `gh auth login` and other TTY prompts are for the user to run; ask them.
+- Never pass secrets on a `hostrun` command line; it is logged.
+- When the sandbox blocks you (`Operation not permitted`, `EPERM`), run `sandbox-note "<what you wanted>" "<why>"` once and continue another way. Do not retry, bypass, or edit the policy.
+
 ## Git
 
 - Default branch: `main`.

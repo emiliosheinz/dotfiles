@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.hostrun</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>SANDBOX_HOME_DIR/.local/scripts/hostrun-broker</string>
+    </array>
+    <key>WatchPaths</key>
+    <array>
+        <string>SANDBOX_HOME_DIR/.local/state/agent-sandbox/inbox</string>
+    </array>
+    <key>ThrottleInterval</key>
+    <integer>1</integer>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>StandardErrorPath</key>
+    <string>SANDBOX_HOME_DIR/.local/state/agent-sandbox/host/broker.err</string>
+</dict>
+</plist>

@@ -1,0 +1,144 @@
+;; overrides.sb — repo-owned rules appended after the agent-safehouse policy.
+;;
+;; sandbox-run renders this file after its per-launch dynamic block (workspace
+;; scope + per-session grants) and hands the result to the generator with
+;; --append-profile, so every rule here is evaluated after every generated
+;; rule (SBPL last-match-wins). HOME comes from the generator's home-*
+;; macros; SANDBOX_WORKDIR is substituted by sandbox-run with the real path
+;; of the launch directory.
+;;
+;; Sections, in order: host grants the generator does not know about,
+;; self-governance denies, git escape guards, tmux socket, explicit secrets.
+
+;; ---------------------------------------------------------------------------
+;; Host grants (read-only unless noted)
+;; ---------------------------------------------------------------------------
+(allow file-read*
+    (home-subpath "/dotfiles")                     ;; stow source for every HOME symlink below
+    (home-subpath "/.local/scripts")               ;; sandbox-run, ws, hostrun, sandbox-note
+    (home-subpath "/.local/bin")                   ;; claude launcher and other user binaries
+    (home-literal "/.aliases.zsh")                 ;; sourced by ~/.zshrc
+    (home-subpath "/.config/ccstatusline")         ;; statusline settings
+    (home-subpath "/.oh-my-zsh")                   ;; zsh -ic startup
+    (home-subpath "/.local/share/zinit")           ;; zsh plugin manager
+    (home-literal "/Library/LaunchAgents")         ;; hostrun detects the broker job definition
+    (home-literal "/Library/LaunchAgents/local.hostrun.plist")
+    (home-subpath "/.config/worktrunk")            ;; wt reads its config from zsh startup
+    (home-subpath "/.config/nvim")
+    (home-subpath "/.config/tmux")
+    (home-literal "/.spaceshiprc.zsh")
+)
+(allow file-read* file-write*
+    (home-subpath "/.cache")                       ;; XDG cache: zsh compdump, tool caches
+    (home-subpath "/.oh-my-zsh/cache")             ;; completion cache written on every interactive start
+    (home-subpath "/Library/Containers/com.docker.docker/Data/log")  ;; docker-credential-desktop log; every image pull fails without it
+    (home-subpath "/Library/Caches/ms-playwright-mcp")   ;; Playwright MCP browser profile (the generator grants only ms-playwright)
+)
+;; docker-credential-desktop stats each ancestor of its log dir before creating it
+(allow file-read-metadata
+    (home-literal "/Library/Containers")
+    (home-literal "/Library/Containers/com.docker.docker")
+    (home-literal "/Library/Containers/com.docker.docker/Data"))
+;; Playwright talks to the browser it launches over a unix socket under
+;; $TMPDIR/pw-*/; unix sockets are deny-by-default in the generated policy.
+(allow network-bind network-inbound network-outbound
+    (local unix-socket (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/pw-[^/]+/"))
+    (remote unix-socket (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/pw-[^/]+/")))
+(allow system-sched)                               ;; setpriority on self; zsh `nice` in prompt sections
+;; /bin/ps is setuid and Seatbelt forbids setuid exec inside a sandbox; ps
+;; only reads process state, so it runs unsandboxed. pgrep/kill are covered
+;; by the process-control toggle.
+(allow process-exec (with no-sandbox) (literal "/bin/ps"))
+
+;; ---------------------------------------------------------------------------
+;; 1. Self-governance: nothing inside may change what runs on the host or how
+;;    the next session is configured. Only the symlink entries in
+;;    HOME are named; their dotfiles targets are read-only from every CWD but
+;;    ~/dotfiles.
+;; ---------------------------------------------------------------------------
+(deny file-write*
+    ;; Claude Code
+    (home-literal "/.claude/settings.json")
+    (home-literal "/.claude/settings.local.json")
+    (home-literal "/.claude/CLAUDE.md")
+    (home-subpath "/.claude/agents")
+    (home-subpath "/.claude/skills")
+    (home-subpath "/.claude/plugins")
+    (home-subpath "/.claude/hooks")
+    (home-subpath "/.claude/commands")
+    (home-literal "/.mcp.json")
+    ;; opencode
+    (home-literal "/.config/opencode/opencode.json")
+    (home-literal "/.config/opencode/AGENTS.md")
+    (home-literal "/.config/opencode/tui.json")
+    (home-subpath "/.config/opencode/plugins")
+    (home-literal "/.opencode.json")
+    ;; host-executed startup and config surfaces
+    (home-literal "/.zshenv")
+    (home-literal "/.zprofile")
+    (home-literal "/.zshrc")
+    (home-literal "/.zlogin")
+    (home-literal "/.aliases.zsh")
+    (home-literal "/.gitconfig")
+    (home-subpath "/.config/git")
+    (home-literal "/.ssh/config")
+    (home-subpath "/Library/LaunchAgents")
+    ;; launcher, scripts, hooks, broker. The generator re-grants the claude
+    ;; launcher's resolved symlink target, so the stow source is named too;
+    ;; edit it from the host.
+    (home-subpath "/.local/bin")
+    (home-subpath "/.local/scripts")
+    (home-prefix "/dotfiles/scripts/.local/bin/claude")
+    ;; gh auth/config: token rotation stays a host action
+    (home-subpath "/.config/gh")
+)
+
+;; Project-level Claude settings in any repository, including the workdir.
+(deny file-write*
+    (regex #"/\.claude/settings\.json$")
+    (regex #"/\.claude/settings\.local\.json$")
+)
+
+;; ---------------------------------------------------------------------------
+;; 2. Git escape guards: hooks and config run or redirect git
+;;    on the host. Every ~/dev repo plus the workdir's own repository.
+;; ---------------------------------------------------------------------------
+(deny file-write*
+    (regex (string-append "^" HOME_DIR "/dev/[^/]+/\\.git/hooks(/|$)"))
+    (regex (string-append "^" HOME_DIR "/dev/[^/]+/\\.git/config$"))
+    (regex (string-append "^" HOME_DIR "/dev/[^/]+/\\.git/config\\.worktree$"))
+    (subpath "SANDBOX_WORKDIR/.git/hooks")
+    (literal "SANDBOX_WORKDIR/.git/config")
+    (literal "SANDBOX_WORKDIR/.git/config.worktree")
+)
+
+;; ---------------------------------------------------------------------------
+;; 3. tmux server: the control socket would run commands outside the
+;;    sandbox. Unix-socket connect() is network-outbound in SBPL, so both the
+;;    file and the socket rule are needed.
+;; ---------------------------------------------------------------------------
+(deny file-read* file-write*
+    (regex #"^(/private)?/tmp/tmux-[0-9]+(/|$)")
+)
+(deny network-outbound
+    (remote unix-socket (path-regex #"^(/private)?/tmp/tmux-[0-9]+/"))
+)
+
+;; ---------------------------------------------------------------------------
+;; 4. Secrets and personal data: the generator already denies most of
+;;    these; repeated here so the rendered policy carries them explicitly.
+;; ---------------------------------------------------------------------------
+(deny file-read* file-write*
+    (home-prefix "/.ssh/id_")
+    (home-subpath "/.gnupg")
+    (home-subpath "/.aws")
+    (home-subpath "/.azure")
+    (home-subpath "/.kube")
+    (home-subpath "/.config/gcloud")
+    (home-subpath "/Library/Application Support/Google/Chrome")
+    (home-subpath "/Library/Application Support/Firefox")
+    (home-subpath "/Library/Application Support/Safari")
+    (home-subpath "/Library/Safari")
+    (home-subpath "/Library/Mail")
+    (home-subpath "/Library/Messages")
+)

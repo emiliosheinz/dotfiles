@@ -1,105 +1,232 @@
-# agents.sb — macOS Sandbox Profile
+# Agent sandbox
 
-`agents.sb` is a [sandbox-exec](https://www.unix.com/man-page/osx/1/sandbox-exec/) profile that constrains AI coding agents (Claude Code, openCode) to a defined set of filesystem, process, and network permissions. It is applied at launch by `sandbox-run` and has no effect on processes started outside of it.
+Claude Code and opencode run under a macOS Seatbelt policy applied by
+`sandbox-run` (the `claude` / `opencode` shell functions in
+`zsh/.aliases.zsh`). The base policy is generated at every launch by
+[agent-safehouse](https://github.com/eugene1g/agent-safehouse); this repo owns
+the launcher, the rules appended after the generated ones (`overrides.sb`),
+the `hostrun` broker and the denial log.
 
-> **Deprecation notice.** `sandbox-exec` and the underlying `sandbox_init` API are formally deprecated since macOS 10.15. They continue to work on current releases but Apple may remove them without notice. There is no supported CLI replacement — App Sandbox requires code signing and does not apply to CLI tools. Monitor macOS release notes.
+> `sandbox-exec` is deprecated since macOS 10.15 but still works on macOS 26.
+> There is no supported CLI replacement.
 
-## How it works
+**Break-glass:** `command claude` (or `command opencode`) runs the agent
+unsandboxed.
 
-The profile opens with `(deny default)`, which blocks every operation not explicitly permitted. Rules are evaluated with **last-match-wins** semantics within each rule class, so targeted `(deny ...)` blocks placed at the bottom of the file override any broader `(allow ...)` rules above them.
+## Files
 
-`SANDBOX_HOME_DIR` is a placeholder in the profile that `sandbox-run` substitutes with the real `$HOME` at launch time via `sed`, making the profile portable across machines without modification.
+| Path | Role |
+|---|---|
+| `scripts/.local/scripts/sandbox-run` | launcher: preconditions, workspace scope, session, policy, sidecar, child process |
+| `sandbox/overrides.sb` | repo-owned rules appended after every generated rule |
+| `scripts/.local/bin/claude` | host-owned launcher that runs the newest installed Claude Code version |
+| `scripts/.local/scripts/hostrun`, `hostrun-broker` | request/approve/execute channel to the host |
+| `sandbox/local.hostrun.plist.template`, `sandbox/install-broker.zsh`, `sandbox/auto-approve.default` | broker launchd job, installer, initial auto-approve list |
+| `scripts/.local/scripts/sandbox-denial-hook`, `opencode/.config/opencode/plugins/sandbox-denials/` | agent-visible denial capture (Claude Code hook, opencode plugin) |
+| `scripts/.local/scripts/sandbox-note`, `sandbox-report` | agent self-report; host-side report and retention |
+| `sandbox/smoke.zsh`, `sandbox/tests/` | smoke matrix and unit tests, host only (`zsh sandbox/tests/run.zsh [--smoke]`) |
 
-## Usage
+## Policy
 
-```zsh
-sandbox-run claude [args...]
-sandbox-run opencode [args...]
+`sandbox-run` renders the policy with
+
+```
+safehouse --stdout --workdir=<cwd> \
+  --enable=docker,ssh,playwright-chrome,process-control,shell-init,keychain,clipboard \
+  --add-dirs-ro=<brew prefix>[:$TERMINFO] --add-dirs=<brew cache> \
+  --append-profile=<per-launch scope file> -- <claude|opencode>
 ```
 
-`sandbox-run` renders the profile to a temp file (substituting `SANDBOX_HOME_DIR`), then calls `sandbox-exec -f <tmpfile> <agent-binary> [args...]`. The temp file is deleted on exit.
+and passes the resulting file to `sandbox-exec -f`. The agent name selects
+the generator's agent profile (`~/.claude`, `~/.config/opencode` state). The
+appended file is a per-launch dynamic block followed by `overrides.sb`:
 
-`sandbox-run` always injects ancestor `file-read*` literals and a `file-read* file-write*` subpath rule for the current working directory, scoping write access to that directory and its descendants. Running from `~/dev/myproject` grants write only to that project; running from `~/dotfiles` grants write to the entire dotfiles tree. Paths containing `"` or `\` are rejected to prevent SBPL injection.
+1. **Workspace scope** (dynamic). `~/dev` launches: `~/dev` writable, every
+   repo working tree read-only with its `.git` writable, `.worktrees` denied
+   except the active workspace. `~/dev/.worktrees/<ws>/<repo>` launches: only
+   that repo's source clone (read-only, `.git` writable) and the workdir;
+   sibling workspaces are invisible. Other launch directories: the workdir
+   only.
+2. **Session grants** (dynamic): the session log, the session's broker queue,
+   the shared inbox, the workspace tool directory.
+3. **Host grants** the generator lacks: dotfiles (read), `~/.local/{bin,scripts}`,
+   `~/.cache` (write), oh-my-zsh, zinit, `~/.config/{ccstatusline,worktrunk,nvim,tmux}`,
+   the broker job definition, the Docker credential helper's log directory
+   (write; image pulls fail without it), the Playwright MCP profile
+   (`~/Library/Caches/ms-playwright-mcp`), `system-sched`, and `/bin/ps` executed
+   `(with no-sandbox)` because Seatbelt forbids setuid exec inside a sandbox.
+4. **Self-governance denies**: Claude and opencode settings, instructions,
+   agents, skills, plugins, hooks; `~/.mcp.json`; shell startup files,
+   `~/.gitconfig`, `~/.config/git`, `~/.ssh/config`, `~/Library/LaunchAgents`;
+   `~/.local/{bin,scripts}`; `~/.config/gh`; project `.claude/settings*.json`.
+5. **Git escape guards**: `.git/hooks`, `.git/config`, `.git/config.worktree`
+   in every `~/dev` repo and in the workdir's repository.
+6. **tmux socket** (file and unix-socket connect).
+7. **Secrets**: `~/.ssh/id_*`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.kube`,
+   `~/.config/gcloud`, Chrome/Firefox/Safari profiles, Mail, Messages.
 
-## Permissions reference
+The launch directory is always writable except for the guards in 4 and 5.
+A `~/dotfiles` launch therefore edits the sandbox, the launcher, hooks and
+shell config through their stow targets; the only exception is the claude
+launcher script itself, which stays read-only everywhere.
 
-### File system
+### Allowed unix sockets
 
-| Resource | Permission | Notes |
+Unix sockets are deny-by-default (generator ≥ 0.11). Allowed:
+
+| Socket | Why |
+|---|---|
+| `/private/tmp/com.apple.launchd.*/Listeners` (ssh-agent) | `git push`, `ssh-add -l`; per-signature approval is opt-in (see host setup) |
+| `/var/run/docker.sock`, `~/.docker/run/docker.sock` (plus colima, orbstack, podman paths) | Docker CLI |
+| `/private/var/run/mDNSResponder` | DNS |
+| Chrome `SingletonSocket` under `/var/folders` | Chrome launched inside |
+| `$TMPDIR/pw-*/` (bind and connect) | Playwright driving the browser it launched |
+
+The tmux control socket (`/private/tmp/tmux-<uid>/`) is denied; tmux verbs
+go through `hostrun`.
+
+## Sessions and state
+
+Every launch is a session `<epoch>-<pid>` under
+`~/.local/state/agent-sandbox`:
+
+| Zone | Path | Writable inside |
 |---|---|---|
-| `/`, `/Users`, `HOME`, `~/Library` | read | macOS requires parent directory read access to resolve file paths inside them — without these, even explicitly allowed subpaths cannot be opened |
-| `/usr`, `/bin`, `/sbin`, `/System/Library`, `/Library/Developer`, `/Library/Frameworks`, `/opt` | read | Agents invoke compilers, interpreters, and system utilities from these directories at runtime; write access is withheld so agents cannot replace host binaries |
-| `/Library/Preferences/.GlobalPreferences.plist`, `/Library/Preferences/com.apple.networkd.plist` | read | Many frameworks read locale and time-zone settings at startup; the networkd plist provides DNS resolver bootstrap |
-| `/private/etc/hosts`, `/private/etc/resolv.conf`, `/private/etc/ssl` | read | Hostname lookups and TLS certificate validation require these at runtime; blocking them breaks `curl`, `git`, and virtually every networked tool |
-| `/tmp`, `/private/tmp`, `/var/folders` | read + write | Agents need temporary scratch space for build artifacts, intermediate files, and tool output. Launchd listener sockets (`com.apple.launchd.*/Listeners`) are explicitly denied to block SSH agent socket access |
-| `/dev/stdout`, `/dev/stderr`, `/dev/tty`, `/dev/ptmx`, `/dev/tty[s]*`, `/dev/pty*`, `/dev/fd` | read + write + ioctl | Standard I/O and PTY devices — required for interactive terminal agents to render output and handle terminal control sequences |
-| `/dev/urandom`, `/dev/random`, `/dev/zero` | read | Many CLIs and crypto libraries read entropy at startup; `/dev/zero` is used for memory initialization by some system libraries |
-| `~/.homebrew` | read | Agents need to invoke Homebrew-installed binaries and link against their libraries; write is withheld so agents cannot replace host tooling |
-| `~/.nvm`, `~/.volta`, npm/pnpm/yarn/turbo caches | read + write | Agents running npm, yarn, or pnpm must download and cache packages during installs; write access is required for those workflows |
-| `~/.npmrc` | read | npm reads this file to authenticate with private registries; write is withheld so agents cannot redirect or rotate credentials |
-| `~/.cache/pip`, `~/.config/pip`, `~/.virtualenvs`, `~/.python_history` | read + write | pip downloads and caches packages here; virtualenvs hold project-scoped Python installs that agents create and modify during setup |
-| `~/.pypirc` | read | `twine` and pip read this to authenticate with PyPI and private package indexes; write is withheld so agents cannot rotate credentials |
-| `~/.skills`, `~/.agents`, `~/AGENTS.md` | read | Generic agent and skill definitions loaded at startup; read-only so agents cannot alter shared instructions |
-| `~/.claude/agents`, `~/.claude/skills`, `~/CLAUDE.md` | read | Claude Code loads these at startup to configure agent behavior; read-only and write-denied by the security overrides below |
-| `~/.gitconfig`, `~/.gitignore`, `~/.config/git`, `~/.gitattributes` | read | Git reads identity and ignore rules on every operation; without this, commits fail and global ignores do not apply |
-| `~/.ssh/config`, `~/.ssh/known_hosts` | read | Git over SSH and remote operations need to resolve host aliases and verify server identity; private keys are denied separately |
-| `~/.ssh/id_*` | **deny** | All SSH private keys blocked regardless of any earlier broad allows |
-| `~/.gnupg` | **deny** | GnuPG keyring and private keys fully blocked |
-| `~/.aws`, `~/.azure`, `~/.kube`, `~/.config/gcloud` | **deny** | Cloud provider credentials fully blocked |
-| `~/.config/gh` | read | `gh` reads OAuth tokens from here to authenticate API requests; write is blocked to prevent silent token rotation |
-| `~/.cache/gh`, `~/.local/share/gh`, `~/.local/state/gh` | read + write | GH CLI writes cache, command history, and API response state here during normal operation |
-| `~/Library/Keychains`, `~/Library/Preferences/com.apple.security.plist` | read + write | Required for Claude Code OAuth token refresh — the macOS Keychain API needs read/write access to update stored tokens |
-| `/Library/Keychains/System.keychain`, `/private/var/db/mds` | read | `securityd` requires these paths to resolve IPC handles during keychain operations |
-| `~/.cache/claude`, `~/.claude`, `~/.config/claude`, `~/.local/state/claude`, `~/.local/share/claude`, `~/.mcp.json` | read + write | Claude Code reads and writes session state, MCP config, and conversation data here; intentionally broad to avoid breaking internal I/O |
-| `~/.claude/CLAUDE.md`, `~/.claude/settings.json`, `~/.claude/settings.local.json`, `~/.claude/agents`, `~/.claude/skills` | **deny write** | Self-modification guard — agents cannot alter their own global instructions, permissions, or agent/skill definitions |
-| `*/.claude/settings.json`, `*/.claude/settings.local.json` (regex across all repos) | **deny write** | Prevents per-project permission escalation — agents cannot grant themselves new permissions for future sessions |
-| `~/.opencode`, `~/.config/opencode`, `~/.cache/opencode`, related state | read + write | openCode reads and writes session data, config, and cache here during normal operation |
-| `~/.config/opencode/AGENTS.md`, `~/.config/opencode/opencode.json`, `~/.opencode.json` | **deny write** | openCode self-modification guard, mirroring the Claude Code equivalent |
-| `~/.config/github-copilot` | read | Copilot CLI reads auth tokens from here; write is blocked to prevent silent token rotation |
-| `~/Library/Caches/ms-playwright`, `~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright-go` | read + write | Playwright (invoked via `@playwright/mcp`) downloads Chromium/Firefox/WebKit binaries here on first use; runtime user-data dirs live under `/var/folders` and are already writable |
-| `/Applications/Google Chrome.app`, `/Applications/Microsoft Edge.app`, `/Applications/Firefox.app` | read metadata | Playwright resolves system browser channels (`channel: "chrome"`) via Launch Services bundle lookups; metadata-only — no execution |
-| `~/dev/` | CWD-scoped read + write | No static grant. `sandbox-run` injects a `file-read* file-write*` subpath rule scoped to the launch CWD and ancestor `file-read*` literals for path traversal. Agents launched from `~/dev/myproject` can write only within that project; sibling repos are inaccessible |
-| `~/dotfiles` | read (static); CWD-scoped read + write (injected) | Static read-only grant so symlink targets (`.gitconfig`, `.tmux.conf`, etc.) resolve correctly from any CWD. When launched from inside `~/dotfiles`, `sandbox-run` additionally injects a `file-read* file-write*` subpath rule granting write access |
-| `~/.local/bin` | read | Binary symlinks (e.g. `claude`) are resolved from here; read-only prevents PATH poisoning — agents cannot drop executables that survive the session |
-| `~/.local/scripts`, `~/.oh-my-zsh`, `~/.local/share/zinit`, `~/.config/nvim`, `~/.config/tmux`, `~/.config/lazygit`, `~/.config/bat`, `~/.config/btop`, `~/.zshrc`, `~/.zshenv`, `~/.zprofile`, `~/.zlogin`, `~/.aliases.zsh` | read | Agents source these indirectly through the tools they spawn; read access is required for normal shell and tool startup |
-| `~/.local/share/zoxide` | read + write | Zoxide jump database; writable because it is updated on every directory change |
-| `~/Library/Application Support/Google/Chrome`, Firefox, Safari, `~/Library/Safari` | **deny** | Browser history, cookies, and stored passwords fully blocked |
-| `~/Library/Mail`, `~/Library/Messages` | **deny** | Personal communication data fully blocked |
+| session | `sessions/<sid>/{log.jsonl,requests/,results/}` | that session only |
+| shared | `inbox/` (empty markers `<sid>.<rid>`) | every session |
+| host | `host/{meta/,policy/,storm/,scratch/,auto-approve,broker.jsonl,events.jsonl}` | nobody |
 
-### Process
+Exported inside: `SANDBOX_SESSION_ID`, `SANDBOX_SESSION_LOG`, `WS_WORKSPACE`
+(the resolved workspace, empty outside `~/dev`), `PATH` prefixed with
+`<tooldir>/bin` (`~/dev/.worktrees/<ws>/.tools` or `<workdir>/.tools`).
+`NPM_CONFIG_PREFIX` is unset (nvm). The agent runs as a child of
+`sandbox-run`: signals are forwarded, the exit status propagated, the queue
+removed on exit, and a supervisor caps the session log at 20 MB.
 
-| Permission | Scope | Notes |
-|---|---|---|
-| `process-exec` | Unrestricted | Agents invoke compilers, linters, test runners, and other tools — no reliable allowlist exists in SBPL without breaking normal toolchain use |
-| `process-fork` | Unrestricted | Agents spawn subshells and parallel tool chains; without fork, most CLI workflows break |
-| `process-info*` | Same sandbox only | Agents query process state to check exit codes, PIDs, and child process health; scoped to the sandbox instance |
-| `signal` | Same sandbox only | Agents need to cancel or interrupt child processes they spawned; scoped so agents cannot kill unrelated host processes |
-| `mach-priv-task-port` | Same sandbox only | Required by some macOS system frameworks at process startup; scoped to the sandbox to limit inspection to co-running sandboxed processes |
-| `pseudo-tty` | Unrestricted | Many CLI tools require a TTY for interactive prompts and terminal control sequences |
+## hostrun
 
-### Network
+`hostrun <command> [args...]` asks the host to run a non-interactive command
+in the session's workdir. The request goes into the session queue plus an
+empty marker in the inbox; the launchd job `local.hostrun` wakes on the
+inbox, reads the request once (later edits are ignored), takes workspace and
+workdir from host-side session metadata, sets the deadline at the request
+file's mtime + 30 s, and decides:
 
-| Permission | Scope | Notes |
-|---|---|---|
-| `network*` | Unrestricted — all interfaces, all ports, inbound and outbound | Full network access is intentionally granted. Data exfiltration is explicitly out of scope per the threat model. Any secret readable in the filesystem (tokens, code) can be sent to an external endpoint. Domain-level filtering is not achievable within SBPL and belongs in a complementary app firewall (e.g. LuLu, Little Snitch) |
+1. **storm**: three consecutive denials or timeouts from one session block
+   further requests for 10 minutes (`hostrun: storm guard active`, exit 126).
+2. **auto**: the command line matches a line of the host-only list
+   `host/auto-approve` (anchored extended regexes; a bad line disables the
+   whole list). Initial list: `open https://…` and `ws wt add <repo> [-b <base>]`.
+3. **dialog**: an osascript dialog showing the workspace and the exact
+   command line, default button Deny, giving up at the deadline.
 
-### IPC / System
+Approved commands run directly (no shell, no rc files), with stdin from
+`/dev/null`, a fixed `PATH`, `HOME` and `WS_WORKSPACE`, a 600 s cap and 1 MB
+captures. The result is delivered by rename; every request is logged with
+its decision in `host/broker.jsonl`. Exit codes: the command's own; 126
+denied / storm / invalid; 124 timed out; 127 broker not installed.
 
-| Permission | Resource | Notes |
-|---|---|---|
-| `mach-lookup` | Logging, DNS, FSEvents, trust, launch services | Required for normal process startup — these services handle log delivery, name resolution, file-system event notifications, and code-signing checks |
-| `mach-lookup` | `com.apple.SecurityServer`, `com.apple.secd`, `com.apple.trustd`, related | Required for keychain operations; combined with keychain R/W, this gives agents full programmatic keychain access |
-| `sysctl-read` | Kernel parameters | Many CLIs query CPU count, memory size, and OS version at startup; blocking sysctl causes widespread tool failures |
-| `system-socket` | Raw socket creation | Some network diagnostic tools require raw socket access for ICMP and low-level probing; complements `network*` |
-| `ipc-posix-shm-read-data` | `apple.shm.notification_center` | System frameworks read this shared memory region during notification dispatch at process initialization |
-| `ipc-posix-shm-*` | `com.apple.AppleDatabaseChanged` | Keychain change notification channel; required so keychain clients learn when the database is modified |
+The broker is non-interactive: anything that prompts on a TTY (`gh auth
+login`, `docker login`) is a user-run step. **Do not pass secrets on the
+`hostrun` command line**: it is stored in the broker log.
+
+`ws` inside a session re-dispatches every verb except `workspace` through
+`hostrun`; `ws wt add` is auto-approved so worktree creation (which writes
+`.git/config`) runs on the host.
+
+## Denial log and report
+
+Three producers append to the session log (`SANDBOX_SESSION_LOG`):
+
+- **kernel** — `sandbox-run` streams `/usr/bin/log stream` denials
+  (`Sandbox: <proc>(<pid>) deny(1) <op> <path>`) on the host; the launcher
+  warns `denial capture unavailable` and continues when the stream cannot
+  start. The stream is system-wide, so concurrent sessions capture the same
+  denials; the report dedupes them.
+- **hook** — `sandbox-denial-hook` on Claude Code `PostToolUse` /
+  `PostToolUseFailure` (Bash) and the opencode `sandbox-denials` plugin
+  record tool output matching
+  `Operation not permitted|EPERM|Sandbox: .* deny\(|Mounts denied`.
+- **note** — `sandbox-note "<want>" "<why>"`, run by the agent once when
+  blocked.
+
+`sandbox-report [days]` (default 7) prints top op+path pairs, top hook
+commands, every note and every broker record; it prunes session directories
+older than 30 days once they exceed 50 MB and rotates the broker log.
+
+## Smoke matrix
+
+`sandbox/smoke.zsh` runs a matrix of allow/deny probes through the real launcher
+with a stub agent, one fresh policy per row. Fixture: a throwaway repo
+`~/dev/sbx-fixture` with worktrees in workspaces `sbx-a` and `sbx-b`
+(override with `SMOKE_REPO`, `SMOKE_WS`, `SMOKE_OTHER`), `~/.ssh/id_ed25519`,
+Google Chrome, `gh auth status`, a loaded ssh-agent key, a running tmux
+server, `safehouse` and `jq`. Broker rows are skipped until the launchd job
+is installed. `sandbox/tests/run.zsh` runs the unit tests (`--smoke` adds the
+matrix); all must run from an unsandboxed shell.
+
+```zsh
+zsh sandbox/tests/run.zsh        # unit tests
+zsh sandbox/smoke.zsh            # whole matrix
+zsh sandbox/smoke.zsh --only kernel-denials
+```
 
 ## Accepted risks
 
-| Risk | Mitigation |
+| Risk | Why accepted |
 |---|---|
-| Unrestricted network (exfiltration) | Out of scope by design. Use a per-process app firewall externally |
-| CWD-scoped read/write (injected at launch) | Scoped to the launch directory — sibling repos are inaccessible. Git history provides recovery within the project |
-| Keychain read/write | Scoped to `~/Library/Keychains`; required for Claude Code OAuth. No tighter grant is possible while keeping auth functional |
-| Readable auth tokens (`.npmrc`, `.pypirc`, `~/.config/gh`, `~/.config/github-copilot`) | All are read-only. Exfiltration risk remains due to `network*` |
-| Unrestricted `process-exec` | No known mitigation within SBPL without breaking toolchain usability |
+| ssh-agent reachable (signing with the loaded key) | git push must work; per-signature approval is opt-in (`ssh-add -c` + askpass) |
+| Docker socket reachable | Docker CLI must work; File Sharing list limits bind mounts (`Mounts denied`) |
+| Agent binaries writable (`~/.local/share/claude/versions`, `~/.config/opencode` state) | self-update from inside; the launcher entry points stay read-only |
+| Cross-workspace `.git` refs/objects writable (`~/dev/<repo>/.git`) | `ws wt add` and fetch/push need it; hooks and config are denied |
+| `~/.claude.json` and auto-memory (`~/.claude/projects/*/memory`) writable | live session state; denying breaks sessions |
+| `~/dotfiles` launches are trusted sessions (sandbox, launcher, hooks, shell and agent config writable through their stow targets) | the checkout is the workdir; review with `git diff` before committing |
+| Inbound network and open egress | exfiltration is out of the threat model |
+| `process-control`: agents can signal host processes, including the sidecar | supervisor restarts it once and records every death |
+| Inbox markers deletable by another session | markers carry no content; DoS only |
+| `/bin/ps` runs unsandboxed | setuid exec is impossible inside; ps only reads process state |
+
+## Host setup
+
+Every step is idempotent; run the whole list on a new machine and again
+after changes.
+
+1. **Generator, launcher, broker**: `bootstrap.sh` does this on a fresh
+   machine (its "agent sandbox" block). On an existing machine:
+   ```zsh
+   cd ~/dotfiles
+   brew trust eugene1g/safehouse && brew install eugene1g/safehouse/agent-safehouse   # >= 0.11.1; jq too
+   [[ -L ~/.local/bin/claude && "$(readlink ~/.local/bin/claude)" != *dotfiles* ]] && rm ~/.local/bin/claude
+   find . -name .DS_Store -not -path './.git/*' -delete   # Finder litter aborts stow
+   stow -R scripts opencode claude zsh                    # ~/.local/bin/claude becomes the dotfiles launcher
+   zsh sandbox/install-broker.zsh                         # renders and loads the launchd job; --uninstall removes it
+   ```
+2. **Docker Desktop**: Settings → Advanced → enable the default socket
+   (`/var/run/docker.sock`); Settings → Resources → File Sharing: keep only
+   `~/dev`, `/tmp`, `/private`, `/var/folders` (add a path here when a
+   compose stack needs it). Start Docker Desktop from inside with
+   `hostrun open -a Docker`.
+3. **Optional per-signature ssh approval**: `brew install theseal/ssh-askpass/ssh-askpass`,
+   then `ssh-add -c ~/.ssh/id_ed25519` (re-add after each login; the agent
+   prompts on every signature).
+4. **Browsers for agents**. Chrome only starts inside with `--no-sandbox`
+   (Seatbelt forbids a nested sandbox), so the Playwright MCP must be
+   registered with that flag; `opencode.json` already does, for Claude run
+   `claude mcp add -s user playwright -- npx @playwright/mcp@latest --no-sandbox`.
+   Headed Chrome shows an "unsupported command-line flag" bar because of it;
+   add `--headless` if you do not need to watch the browser.
+   For a headed browser on the host, `agent-chrome` (alias) starts Chrome
+   with `--remote-debugging-port=9222 --user-data-dir=~/.local/state/agent-chrome`;
+   inside, `curl -s http://127.0.0.1:9222/json/version` returns the
+   `webSocketDebuggerUrl` for Playwright's `connectOverCDP`.
+5. **Smoke fixture** (once):
+   ```zsh
+   git init ~/dev/sbx-fixture && (cd ~/dev/sbx-fixture && echo fixture > README.md && git add . && git commit -qm init)
+   git -C ~/dev/sbx-fixture worktree add -b sbx-a ~/dev/.worktrees/sbx-a/sbx-fixture
+   git -C ~/dev/sbx-fixture worktree add -b sbx-b ~/dev/.worktrees/sbx-b/sbx-fixture
+   zsh ~/dotfiles/sandbox/smoke.zsh
+   ```
+
+**Rollback**: revert the commit; `command claude` bypasses everything;
+`brew pin agent-safehouse` (or `brew install agent-safehouse@<version>` from
+the tap) if a generator upgrade regresses the policy.

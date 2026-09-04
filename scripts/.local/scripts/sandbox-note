@@ -1,0 +1,18 @@
+#!/usr/bin/env zsh
+# sandbox-note "<want>" ["<why>"]: an agent's own report of a capability it
+# needed but could not use inside the sandbox. Appends a `note`
+# record to the session's denial log; exits 0. Outside a session it is a
+# no-op so instructions can call it unconditionally.
+if [[ -z "${1:-}" ]]; then
+    print -u2 'usage: sandbox-note "<want>" ["<why>"]'
+    exit 2
+fi
+[[ -n "${SANDBOX_SESSION_LOG:-}" ]] || exit 0
+command -v jq >/dev/null 2>&1 || exit 0
+size=$(stat -f %z "${SANDBOX_SESSION_LOG}" 2>/dev/null || print 0)
+(( size >= 20 * 1024 * 1024 )) && exit 0
+jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg sid "${SANDBOX_SESSION_ID:-}" \
+    --arg ws "${WS_WORKSPACE:-$PWD}" --arg want "$1" --arg why "${2:-}" \
+    '{ts: $ts, src: "note", session: $sid, ws: $ws, want: $want, why: $why}' \
+    >> "${SANDBOX_SESSION_LOG}" 2>/dev/null
+exit 0

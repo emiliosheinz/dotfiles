@@ -80,6 +80,11 @@ DISABLE_AUTO_TITLE="true"
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 
+# Completion dump under ~/.cache so interactive shells inside the agent sandbox
+# (where ~/.oh-my-zsh and HOME dotfiles are read-only) start clean.
+export ZSH_COMPDUMP="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/.zcompdump-${ZSH_VERSION}"
+mkdir -p "${ZSH_COMPDUMP:h}"
+
 source $ZSH/oh-my-zsh.sh
 
 # User configuration

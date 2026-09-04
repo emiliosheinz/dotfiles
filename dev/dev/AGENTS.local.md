@@ -10,7 +10,7 @@ policy._
 A **workspace** is one unit of parallel feature work. Its name is a single
 identifier that simultaneously names three things:
 
-- the tmux session you are running in,
+- the workspace the user launched you in (exported as `WS_WORKSPACE`),
 - the folder `~/dev/.worktrees/<workspace>/`,
 - a git branch of the same name in every repo enlisted in the workspace.
 
@@ -50,15 +50,17 @@ ws wt add <repo> -b <base>
 ```
 
 This materializes `~/dev/.worktrees/<workspace>/<repo>/` without changing
-your current directory. Do not call `wt` directly — `ws wt add` resolves the
-workspace and validates the target repo for you.
+your current directory; it runs on the host through `hostrun` and needs no
+approval. Do not call `wt` directly — `ws wt add` resolves the workspace and
+validates the target repo for you.
 
 ## Permissions
 
 - **Writes allowed** on:
   - `~/dev/.worktrees/<workspace>/**` — the current workspace's worktrees.
-  - `~/dev/<repo>/**` — git metadata under the primary clone; `ws wt add`
-    writes here. Do not edit source files in the primary clone yourself.
+  - `~/dev/<repo>/.git/**` — git metadata under the primary clone (refs,
+    objects, worktrees), except `.git/hooks/` and `.git/config`, which are
+    read-only. Do not edit source files in the primary clone yourself.
 - **Reads and writes denied** on `~/dev/.worktrees/<other-workspace>/**`.
   Other workspaces are invisible to you. This isolation is intentional.
 

@@ -1,0 +1,75 @@
+#!/usr/bin/env zsh
+# sandbox-report [days]: aggregate the denial log on the host.
+# Reads every session log plus the host-only broker log, tolerates malformed
+# lines, strips control characters, dedupes kernel records captured by
+# concurrent sessions, and prints four sections. Applies retention:
+# session directories older than 30 days are deleted once they exceed 50 MB
+# in total, and the broker log is rotated on the same rule.
+# SANDBOX_STATE_ROOT overrides the state root (tests only).
+set -uo pipefail
+
+days="${1:-7}"
+[[ "${days}" == <-> ]] || { print -u2 "usage: sandbox-report [days]"; exit 2 }
+root="${SANDBOX_STATE_ROOT:-${HOME}/.local/state/agent-sandbox}"
+since=$(date -u -v-"${days}"d +%Y-%m-%dT%H:%M:%SZ)
+retain_days=30
+prune_bytes=$(( 50 * 1024 * 1024 ))
+
+# --- retention ----------------------------------------------------------------
+if [[ -d "${root}/sessions" ]]; then
+    old=("${root}"/sessions/*(/Nm+${retain_days}))
+    if (( ${#old} )); then
+        total=0
+        for d in "${old[@]}"; do
+            (( total += $(stat -f %z "${d}/log.jsonl" 2>/dev/null || print 0) ))
+        done
+        if (( total > prune_bytes )); then
+            for d in "${old[@]}"; do
+                rm -rf "${d}" "${root}/host/meta/${d:t}.json" "${root}/host/storm/${d:t}"
+            done
+        fi
+    fi
+fi
+broker="${root}/host/broker.jsonl"
+if [[ -f "${broker}" ]]; then
+    first_ts=$(head -n 1 "${broker}" | jq -r '.ts // empty' 2>/dev/null)
+    if [[ -n "${first_ts}" && "${first_ts}" < "$(date -u -v-${retain_days}d +%Y-%m-%dT%H:%M:%SZ)" ]]; then
+        mv -f "${broker}" "${broker}.1"
+    fi
+fi
+
+# --- collect ------------------------------------------------------------------
+inputs=("${root}"/sessions/*/log.jsonl(N) "${broker}"(N) "${broker}.1"(N) "${root}/host/events.jsonl"(N))
+if (( ${#inputs} == 0 )); then
+    print "no denials recorded in the last ${days} days"
+    exit 0
+fi
+
+cat "${inputs[@]}" | jq -R -r -s --arg since "${since}" --arg days "${days}" '
+    def clean: if type == "string" then gsub("[\\x00-\\x1f\\x7f]"; "") else tostring end;
+    def col(n): tostring | . + (" " * (n - length));
+    [ split("\n")[] | select(length > 0) | (fromjson? // {bad: true}) ] as $all
+    | ($all | map(select(.bad == true)) | length) as $malformed
+    | [ $all[] | select(.bad != true and (.ts // "") >= $since) ] as $recs
+    | [ $recs[] | select(.src == "kernel") ] | unique_by(.ts, .op, .path, .pid) as $kernel
+    | [ $recs[] | select(.src == "hook") ] as $hooks
+    | [ $recs[] | select(.src == "note") ] as $notes
+    | [ $recs[] | select(.src == "broker") ] as $broker
+    | [ $recs[] | select(.event != null) ] as $events
+    | if (($kernel + $hooks + $notes + $broker) | length) == 0 then
+        "no denials recorded in the last \($days) days"
+      else
+        ([ "## Kernel denials (top 10 by op+path; capture gaps: sidecar-died \($events | map(select(.event == "sidecar-died")) | length), log-truncated \($events | map(select(.event == "log-truncated")) | length))" ]
+         + ([ $kernel | group_by(.op, .path)[] | {n: length, op: .[0].op, path: .[0].path} ]
+            | sort_by(-.n, .path) | .[:10] | map("  \(.n | col(6)) \(.op | clean | col(24)) \(.path | clean)"))
+         + [ "", "## Agent-visible denials (top 10 commands from hook records)" ]
+         + ([ $hooks | group_by(.cmd)[] | {n: length, cmd: .[0].cmd} ]
+            | sort_by(-.n, .cmd) | .[:10] | map("  \(.n | col(6)) \(.cmd | clean)"))
+         + [ "", "## Notes (\($notes | length))" ]
+         + ($notes | map("  \(.ts | clean)  \(.ws | clean)  want: \(.want | clean)  why: \(.why | clean)"))
+         + [ "", "## Broker requests (\($broker | length))" ]
+         + ($broker | map("  \(.ts | clean)  \(.ws | clean)  \(.decision | clean | col(11)) rc=\(.rc | tostring | col(4)) \(.cmd | clean)"))
+         + (if $malformed > 0 then [ "", "skipped \($malformed) malformed lines" ] else [] end)
+        ) | join("\n")
+      end
+'
