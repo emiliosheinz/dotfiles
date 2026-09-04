@@ -78,6 +78,8 @@ check "approve after deadline: timeout, not run" '[[ "$(cat "${tmp}/r6.rc")" == 
 check "dialog give-up bounded by the deadline (>= 5)" 'tail -1 "${DIALOG_CALLS}" | awk -F"|" "{exit !(\$3 >= 5)}"'
 
 # --- SBOX-32: auto-approve list -----------------------------------------------
+expected_default=$'^open https://[^ ]+$\n^ws wt add [A-Za-z0-9][A-Za-z0-9._-]*( -b [A-Za-z0-9][A-Za-z0-9._/-]*)?$'
+check "shipped default list: exactly the two spec patterns" '[[ "$(grep -v "^#" "${here}/auto-approve.default")" == "${expected_default}" ]]'
 printf '# comment\n^open https://[^ ]+$\n^/usr/bin/true$\n' > "${root}/host/auto-approve"
 n=$(calls)
 submit "${S2}" "${tmp}/r7" /usr/bin/true
@@ -136,7 +138,7 @@ rm -f "${root}/sessions/${S1}/results/2-2-2.json" "${root}/sessions/${S1}/reques
 head -c 70000 /dev/zero | tr '\0' 'a' > "${root}/sessions/${S1}/requests/3-3-3.json"
 : > "${root}/inbox/${S1}.3-3-3"
 zsh "${broker}"
-check "oversize request: invalid" '[[ "$(jq -r .decision "${root}/sessions/${S1}/results/3-3-3.json")" == invalid ]]'
+check "oversize request: invalid, request file removed" '[[ "$(jq -r .decision "${root}/sessions/${S1}/results/3-3-3.json")" == invalid && ! -e "${root}/sessions/${S1}/requests/3-3-3.json" ]]'
 rm -f "${root}/sessions/${S1}/results/3-3-3.json"
 # result path pre-planted as a symlink: replaced by rename, target untouched
 print planted > "${tmp}/target.txt"

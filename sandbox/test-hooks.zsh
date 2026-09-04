@@ -41,6 +41,7 @@ check "log at 20 MB: exit 0, append skipped" '(( rc == 0 && $(stat -f %z "${big}
 
 zsh "${note}" "docker ps" "check whether the dev stack is up"; rc=$?
 check "sandbox-note two args: exit 0, note record" '(( rc == 0 )) && [[ "$(last | jq -r .src)" == note && "$(last | jq -r .want)" == "docker ps" && "$(last | jq -r .why)" == "check whether the dev stack is up" ]]'
+check "sandbox-note: session and ws tagged" '[[ "$(last | jq -r .session)" == 123-45 && "$(last | jq -r .ws)" == wsA ]]'
 zsh "${note}" "open a URL"; rc=$?
 check "sandbox-note one arg: why empty" '(( rc == 0 )) && [[ "$(last | jq -r .why)" == "" && "$(last | jq -r .want)" == "open a URL" ]]'
 SANDBOX_SESSION_LOG="${big}" zsh "${note}" "x" "y"; rc=$?
