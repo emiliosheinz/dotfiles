@@ -2,6 +2,16 @@
 
 MODE="${1:-switch}"
 
+# Inside an agent sandbox (sandbox-run exports SANDBOX_SESSION_ID) the tmux
+# socket is denied; every verb except `workspace` runs on the host through
+# the hostrun broker with the argv untouched (`ws wt add` is auto-approved).
+if [[ -n "${SANDBOX_SESSION_ID:-}" ]]; then
+    case "$MODE" in
+        workspace|help|-h|--help) ;;
+        *) exec hostrun ws "$@" ;;
+    esac
+fi
+
 get_workspaces() {
     tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -v "^backstage-"
 }
