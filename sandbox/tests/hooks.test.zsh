@@ -1,10 +1,10 @@
 #!/usr/bin/env zsh
-# SBOX-41 (hook record from Claude Code hook JSON), SBOX-42 (sandbox-note),
-# SBOX-44/45 (append discipline: no session, cap reached, malformed input).
+# sandbox-denial-hook (hook record from Claude Code hook JSON), sandbox-note,
+# and append discipline (no session, cap reached, malformed input).
 set -uo pipefail
 here="${0:A:h}"
-hook="${here}/../scripts/.local/scripts/sandbox-denial-hook"
-note="${here}/../scripts/.local/scripts/sandbox-note"
+hook="${here}/../../scripts/.local/scripts/sandbox-denial-hook"
+note="${here}/../../scripts/.local/scripts/sandbox-note"
 tmp=$(mktemp -d); trap 'rm -rf "${tmp}"' EXIT
 log="${tmp}/log.jsonl"; : > "${log}"
 export SANDBOX_SESSION_LOG="${log}" SANDBOX_SESSION_ID="123-45" WS_WORKSPACE="wsA"

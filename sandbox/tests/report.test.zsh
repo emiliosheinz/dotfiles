@@ -1,9 +1,9 @@
 #!/usr/bin/env zsh
-# SBOX-43 (four sections, ordering, caps, empty window, sanitising),
-# SBOX-40 (kernel dedupe across sessions), SBOX-45 (retention).
+# sandbox-report: four sections, ordering, caps, empty window, sanitising,
+# kernel dedupe across sessions, retention.
 set -uo pipefail
 here="${0:A:h}"
-report="${here}/../scripts/.local/scripts/sandbox-report"
+report="${here}/../../scripts/.local/scripts/sandbox-report"
 tmp=$(mktemp -d); trap 'rm -rf "${tmp}"' EXIT
 export SANDBOX_STATE_ROOT="${tmp}/state"
 root="${SANDBOX_STATE_ROOT}"

@@ -1,5 +1,5 @@
 {
-  "_source": "shape per @opencode-ai/plugin 1.14.48 dist/index.d.ts `tool.execute.after`; a live capture was not possible (Copilot licence refused on 2026-09-03), see state.md AD-39",
+  "_source": "shape per @opencode-ai/plugin 1.14.48 dist/index.d.ts `tool.execute.after`",
   "input": {
     "tool": "bash",
     "sessionID": "ses_fixture",

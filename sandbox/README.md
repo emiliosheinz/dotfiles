@@ -24,7 +24,7 @@ unsandboxed.
 | `sandbox/local.hostrun.plist.template`, `sandbox/install-broker.zsh`, `sandbox/auto-approve.default` | broker launchd job, installer, initial auto-approve list |
 | `scripts/.local/scripts/sandbox-denial-hook`, `opencode/.config/opencode/plugins/sandbox-denials/` | agent-visible denial capture (Claude Code hook, opencode plugin) |
 | `scripts/.local/scripts/sandbox-note`, `sandbox-report` | agent self-report; host-side report and retention |
-| `sandbox/smoke.zsh`, `sandbox/test-*.zsh`, `sandbox/test-opencode-plugin.mjs` | smoke matrix and unit tests (host only) |
+| `sandbox/smoke.zsh`, `sandbox/tests/` | smoke matrix and unit tests, host only (`zsh sandbox/tests/run.zsh [--smoke]`) |
 
 ## Policy
 
@@ -154,18 +154,19 @@ older than 30 days once they exceed 50 MB and rotates the broker log.
 
 ## Smoke matrix
 
-`sandbox/smoke.zsh` runs every row of spec SBOX-52 through the real launcher
+`sandbox/smoke.zsh` runs a matrix of allow/deny probes through the real launcher
 with a stub agent, one fresh policy per row. Fixture: a throwaway repo
 `~/dev/sbx-fixture` with worktrees in workspaces `sbx-a` and `sbx-b`
 (override with `SMOKE_REPO`, `SMOKE_WS`, `SMOKE_OTHER`), `~/.ssh/id_ed25519`,
 Google Chrome, `gh auth status`, a loaded ssh-agent key, a running tmux
 server, `safehouse` and `jq`. Broker rows are skipped until the launchd job
-is installed. `sandbox/test-*.zsh` and `node sandbox/test-opencode-plugin.mjs`
-are the unit tests; all must run from an unsandboxed shell.
+is installed. `sandbox/tests/run.zsh` runs the unit tests (`--smoke` adds the
+matrix); all must run from an unsandboxed shell.
 
 ```zsh
+zsh sandbox/tests/run.zsh        # unit tests
 zsh sandbox/smoke.zsh            # whole matrix
-zsh sandbox/smoke.zsh --only SBOX-40
+zsh sandbox/smoke.zsh --only kernel-denials
 ```
 
 ## Accepted risks
@@ -230,25 +231,3 @@ after changes.
 **Rollback**: revert the commit; `command claude` bypasses everything;
 `brew pin agent-safehouse` (or `brew install agent-safehouse@<version>` from
 the tap) if a generator upgrade regresses the policy.
-
-## Manual verification
-
-One line per AC the automated matrix cannot see. Fill `observed on:` with
-the date and machine.
-
-| AC | Steps | observed on |
-|---|---|---|
-| SBOX-08 Docker socket | Docker Desktop running; inside: `docker ps` exits 0 | observed on: 2026-09-04 (personal; `docker ps` and `docker pull alpine:3.20` exit 0 inside) |
-| SBOX-09 Ctrl-C / resize | in the Claude TUI: Ctrl-C interrupts a running tool, a second Ctrl-C prompts to exit; resize the pane and the UI reflows | observed on: |
-| SBOX-14 Docker mounts | inside: `docker run --rm -v "$HOME/.ssh:/x" alpine true` fails with `Mounts denied`; `docker run --rm -v "$PWD:/x" alpine true` succeeds | observed on: 2026-09-04 (personal; `$PWD` mount ok; `~/.ssh` mount still succeeds because File Sharing has not been narrowed in the Docker Desktop GUI, pending) |
-| SBOX-19 browser | inside: `hostrun open https://example.com` exits 0 and the page opens in the default browser | observed on: 2026-09-03 (personal; exit 0 and `auto` in the broker log seen by smoke, tab not visually confirmed) |
-| SBOX-30 approve / deny | inside: `hostrun /bin/echo hi` → dialog → Approve prints `hi`; again → Deny prints `hostrun: denied`, exit 126 | observed on: 2026-09-04 (personal; Approve printed `hi` rc 0, Deny printed `hostrun: denied` rc 126) |
-| SBOX-31 prompt | the dialog shows the workspace name (or workdir) and the exact command line; Deny is the focused button | observed on: |
-| SBOX-33 logged | `sandbox-report 1` on the host lists both requests with `approved` and `denied` | observed on: 2026-09-04 (personal) |
-| SBOX-34 timeout | inside: `hostrun /bin/echo hi`, ignore the dialog for 30 s → `hostrun: timed out`, exit 124; the dialog closes | observed on: |
-| SBOX-35 concurrent / snapshot | two sessions run `hostrun /bin/echo <session>` at once; each prints its own; broker log shows two records | observed on: |
-| SBOX-36 storm | deny three requests in a row; the fourth prints `hostrun: storm guard active` without a dialog | observed on: |
-| SBOX-51 OAuth refresh | keep a session open past the token `expiresAt` (`security find-generic-password -s "Claude Code-credentials" -w \| jq .claudeAiOauth.expiresAt`) and send a prompt: no login prompt | observed on: |
-| SBOX-53 spoke | `zsh sandbox/smoke.zsh` passes on the spoke machine | observed on: |
-| SBOX-62 setup idempotency | run the host setup list twice; the second run changes nothing (`launchctl print gui/$UID/local.hostrun` still loaded, symlinks unchanged) | observed on: 2026-09-04 (personal; steps 1-3 twice, launcher symlink, plist and auto-approve checksums identical, job loaded) |
-| SBOX-63 CDP | `agent-chrome` on the host; inside: `curl -s http://127.0.0.1:9222/json/version` contains `webSocketDebuggerUrl` | observed on: 2026-09-03 (personal) |

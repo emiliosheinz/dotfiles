@@ -18,9 +18,9 @@
     (home-subpath "/.local/scripts")               ;; sandbox-run, ws, hostrun, sandbox-note
     (home-subpath "/.local/bin")                   ;; claude launcher and other user binaries
     (home-literal "/.aliases.zsh")                 ;; sourced by ~/.zshrc
-    (home-subpath "/.config/ccstatusline")         ;; statusline settings (SBOX-51)
-    (home-subpath "/.oh-my-zsh")                   ;; zsh -ic startup (SBOX-12)
-    (home-subpath "/.local/share/zinit")           ;; zsh plugin manager (SBOX-12)
+    (home-subpath "/.config/ccstatusline")         ;; statusline settings
+    (home-subpath "/.oh-my-zsh")                   ;; zsh -ic startup
+    (home-subpath "/.local/share/zinit")           ;; zsh plugin manager
     (home-literal "/Library/LaunchAgents")         ;; hostrun detects the broker job definition
     (home-literal "/Library/LaunchAgents/local.hostrun.plist")
     (home-subpath "/.config/worktrunk")            ;; wt reads its config from zsh startup
@@ -29,26 +29,26 @@
     (home-literal "/.spaceshiprc.zsh")
 )
 (allow file-read* file-write*
-    (home-subpath "/.cache")                       ;; XDG cache: zsh compdump, tool caches (SBOX-12)
+    (home-subpath "/.cache")                       ;; XDG cache: zsh compdump, tool caches
     (home-subpath "/.oh-my-zsh/cache")             ;; completion cache written on every interactive start
-    (home-subpath "/Library/Containers/com.docker.docker/Data/log")  ;; docker-credential-desktop log; every image pull fails without it (SBOX-14)
+    (home-subpath "/Library/Containers/com.docker.docker/Data/log")  ;; docker-credential-desktop log; every image pull fails without it
 )
 ;; docker-credential-desktop stats each ancestor of its log dir before creating it
 (allow file-read-metadata
     (home-literal "/Library/Containers")
     (home-literal "/Library/Containers/com.docker.docker")
     (home-literal "/Library/Containers/com.docker.docker/Data"))
-(allow system-sched)                               ;; setpriority on self; zsh `nice` in prompt sections (SBOX-12)
+(allow system-sched)                               ;; setpriority on self; zsh `nice` in prompt sections
 ;; /bin/ps is setuid and Seatbelt forbids sugid exec inside a sandbox; ps only
-;; reads process state, so it runs unsandboxed (SBOX-10). pgrep/kill are
+;; reads process state, so it runs unsandboxed. pgrep/kill are
 ;; covered by the process-control toggle.
 (allow process-exec (with no-sandbox) (literal "/bin/ps"))
 
 ;; ---------------------------------------------------------------------------
 ;; 1. Self-governance: nothing inside may change what runs on the host or how
-;;    the next session is configured (SBOX-02). Only the symlink entries in
+;;    the next session is configured. Only the symlink entries in
 ;;    HOME are named; their dotfiles targets are read-only from every CWD but
-;;    ~/dotfiles (AD-29).
+;;    ~/dotfiles.
 ;; ---------------------------------------------------------------------------
 (deny file-write*
     ;; Claude Code
@@ -77,13 +77,13 @@
     (home-subpath "/.config/git")
     (home-literal "/.ssh/config")
     (home-subpath "/Library/LaunchAgents")
-    ;; launcher, scripts, hooks, broker (SBOX-16, SBOX-32, SBOX-44). The
+    ;; launcher, scripts, hooks, broker. The
     ;; generator re-grants the claude launcher's resolved symlink target, so
     ;; the stow source is named too; edit it from the host.
     (home-subpath "/.local/bin")
     (home-subpath "/.local/scripts")
     (home-prefix "/dotfiles/scripts/.local/bin/claude")
-    ;; gh auth/config (SBOX-15): token rotation stays a host action
+    ;; gh auth/config: token rotation stays a host action
     (home-subpath "/.config/gh")
 )
 
@@ -94,7 +94,7 @@
 )
 
 ;; ---------------------------------------------------------------------------
-;; 2. Git escape guards (SBOX-07, AD-08): hooks and config run or redirect git
+;; 2. Git escape guards: hooks and config run or redirect git
 ;;    on the host. Every ~/dev repo plus the workdir's own repository.
 ;; ---------------------------------------------------------------------------
 (deny file-write*
@@ -107,7 +107,7 @@
 )
 
 ;; ---------------------------------------------------------------------------
-;; 3. tmux server (SBOX-06): the control socket would run commands outside the
+;; 3. tmux server: the control socket would run commands outside the
 ;;    sandbox. Unix-socket connect() is network-outbound in SBPL, so both the
 ;;    file and the socket rule are needed.
 ;; ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@
 )
 
 ;; ---------------------------------------------------------------------------
-;; 4. Secrets and personal data (SBOX-05): the generator already denies most of
+;; 4. Secrets and personal data: the generator already denies most of
 ;;    these; repeated here so the rendered policy carries them explicitly.
 ;; ---------------------------------------------------------------------------
 (deny file-read* file-write*

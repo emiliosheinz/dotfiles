@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # hostrun <command> [args...]: ask the host to run a non-interactive command
-# outside the sandbox (SBOX-30). The request goes into this session's own
+# outside the sandbox. The request goes into this session's own
 # queue plus an empty marker in the shared inbox; the launchd broker decides
 # (auto-approve list, storm guard, or a dialog) and delivers the result by
 # rename. Exit codes: the command's own; 126 denied/storm/invalid; 124 timed

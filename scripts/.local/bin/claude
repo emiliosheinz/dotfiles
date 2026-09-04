@@ -2,7 +2,7 @@
 # claude: host-owned launcher that runs the newest installed Claude Code
 # version. Replaces the installer's symlink so `claude update` from inside
 # the sandbox (which only writes a new versions/<v> file) takes effect on the
-# next launch without touching ~/.local/bin (SBOX-16).
+# next launch without touching ~/.local/bin.
 set -euo pipefail
 
 versions_dir="${CLAUDE_VERSIONS_DIR:-${HOME}/.local/share/claude/versions}"

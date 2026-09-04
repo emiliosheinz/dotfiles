@@ -1,6 +1,6 @@
 // sandbox-denials — opencode plugin
 //
-// Records agent-visible sandbox denials (SBOX-41): after every bash tool
+// Records agent-visible sandbox denials: after every bash tool
 // call whose output matches the denial pattern, appends a `hook` record to
 // the session's denial log. No-op outside a sandbox session
 // (SANDBOX_SESSION_LOG unset) and once the log reaches its 20 MB cap.

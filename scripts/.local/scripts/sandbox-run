@@ -49,7 +49,7 @@ case "${1:-}" in
 esac
 shift
 
-# --- launch-directory refusal (SBOX-01) ---------------------------------------
+# --- launch-directory refusal ---------------------------------------
 case "${WORKDIR}" in
     /|"${HOME_DIR}"|"${WT_ROOT}") die "refusing to launch from ${WORKDIR}" ;;
 esac
@@ -59,7 +59,7 @@ if [[ "${WORKDIR}" =~ [\"\\] ]]; then
     die "workdir contains characters unsafe for sandbox policy injection: ${WORKDIR}"
 fi
 
-# --- host tool preconditions (SBOX-54) ----------------------------------------
+# --- host tool preconditions ----------------------------------------
 command -v jq >/dev/null || die "jq not found on PATH (brew install jq)"
 command -v safehouse >/dev/null || die "safehouse not found on PATH (brew install eugene1g/safehouse/agent-safehouse)"
 SAFEHOUSE_VERSION=$(safehouse --version 2>/dev/null | awk 'NR==1{print $NF}')
@@ -68,7 +68,7 @@ if [[ "$(print -l "${MIN_SAFEHOUSE}" "${SAFEHOUSE_VERSION}" | sort -V | head -n 
 fi
 [[ -r "${SCOPE_SRC}" ]] || die "scope file not found: ${SCOPE_SRC}"
 
-# --- agent binary (SBOX-53) ---------------------------------------------------
+# --- agent binary ---------------------------------------------------
 BREW_BIN="$(command -v brew || true)"
 BREW_PREFIX="${BREW_BIN:h:h}"
 BREW_CACHE="${HOMEBREW_CACHE:-${HOME_DIR}/Library/Caches/Homebrew}"
@@ -123,7 +123,7 @@ list_dev_repos() {
     done
 }
 
-# Hooks and config of a granted repo stay unwritable (SBOX-07, AD-08).
+# Hooks and config of a granted repo stay unwritable.
 emit_git_guards() {
     local repo_path="$1"
     printf '(deny file-write* (subpath "%s/.git/hooks") (literal "%s/.git/config") (literal "%s/.git/config.worktree"))\n' \
@@ -170,7 +170,7 @@ emit_worktree_repo_scope() {
     printf '(allow file-read* file-write* (subpath "%s/.git"))\n' "${repo_path}"
     emit_git_guards "${repo_path}"
     # The generator snapshots sibling linked worktrees as readable; other
-    # workspaces must stay invisible (SBOX-03), so lock .worktrees down and
+    # workspaces must stay invisible, so lock .worktrees down and
     # re-open only the path to the workdir.
     printf ';; Workspace lockdown: only %s is visible under %s\n' "${WORKDIR}" "${WT_ROOT}"
     printf '(deny file-read* file-write* (subpath "%s"))\n' "${WT_ROOT}"
@@ -183,7 +183,7 @@ emit_worktree_repo_scope() {
     printf '(allow file-read* file-write* (subpath "%s"))\n' "${WORKDIR}"
 }
 
-# Session log append, own broker queue, shared inbox, tooldir (SBOX-17/35/44).
+# Session log append, own broker queue, shared inbox, tooldir.
 emit_session_grants() {
     local dir="$1" ancestor="" part
     printf '\n;; Session grants: %s\n' "${SESSION_ID}"
@@ -199,7 +199,7 @@ emit_session_grants() {
     printf '(allow file-read* file-write* (subpath "%s"))\n' "${TOOLDIR}"
 }
 
-# --- session identity (AD-17) -------------------------------------------------
+# --- session identity -------------------------------------------------
 write_meta() {
     local tmp="${STATE_ROOT}/host/meta/.${SESSION_ID}.tmp"
     jq -n --arg sid "${SESSION_ID}" --arg ws "${ACTIVE_BRANCH}" --arg workdir "${WORKDIR}" \
@@ -236,7 +236,7 @@ cleanup_session() {
     rm -f "${SCOPE_FILE}" "${POLICY_FILE}" "${STATE_ROOT}/host/policy/${SESSION_ID}.sidecar.err"
 }
 
-# --- denial sidecar (SBOX-40) -------------------------------------------------
+# --- denial sidecar -------------------------------------------------
 # Streams kernel sandbox denials from the unified log (host only: `log` cannot
 # run sandboxed) into the session log as `kernel` records. The stream is
 # system-wide, so concurrent sessions capture the same denials; the report
@@ -327,7 +327,7 @@ if (( ${COLUMNS:-0} == 0 )); then
 fi
 export COLUMNS
 
-# --- process model (SBOX-09) --------------------------------------------------
+# --- process model --------------------------------------------------
 # The agent is a child so terminal signals can be forwarded, its exit status
 # propagated, and the session queue removed afterwards. The supervisor is a
 # separate process that outlives a SIGKILLed launcher: it enforces the

@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
-# sandbox-report [days]: aggregate the denial log on the host (SBOX-43).
+# sandbox-report [days]: aggregate the denial log on the host.
 # Reads every session log plus the host-only broker log, tolerates malformed
 # lines, strips control characters, dedupes kernel records captured by
-# concurrent sessions, and prints four sections. Applies retention (SBOX-45):
+# concurrent sessions, and prints four sections. Applies retention:
 # session directories older than 30 days are deleted once they exceed 50 MB
 # in total, and the broker log is rotated on the same rule.
 # SANDBOX_STATE_ROOT overrides the state root (tests only).

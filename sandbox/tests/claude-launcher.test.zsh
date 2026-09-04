@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
-# SBOX-16: the host-owned claude launcher runs the highest installed version.
+# The host-owned claude launcher runs the highest installed version.
 set -uo pipefail
 here="${0:A:h}"
-launcher="${here}/../scripts/.local/bin/claude"
+launcher="${here}/../../scripts/.local/bin/claude"
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT
 fail=0
@@ -21,7 +21,7 @@ rm "${versions}/2.0.0"
 CLAUDE_VERSIONS_DIR="${versions}" zsh "${launcher}" 2>/dev/null; rc=$?
 check "no versions installed exits non-zero" '(( rc != 0 ))'
 
-# SBOX-16 first AC through the real chain: shell function -> sandbox-run ->
+# Through the real chain: shell function -> sandbox-run ->
 # ~/.local/bin/claude -> highest version. Needs the host launcher installed.
 real_versions="${HOME}/.local/share/claude/versions"
 if [[ -d "${real_versions}" && "$(readlink "${HOME}/.local/bin/claude")" == *dotfiles/scripts/.local/bin/claude ]]; then

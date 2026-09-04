@@ -1,11 +1,11 @@
 #!/usr/bin/env zsh
-# sandbox-run unit tests: CWD refusal (SBOX-01), tool preconditions (SBOX-54),
-# repo validation (SBOX-04), agent resolution (SBOX-53), policy rendering
-# (SBOX-50), session/environment contract (SBOX-17), process model (SBOX-09).
+# sandbox-run unit tests: CWD refusal, tool preconditions, repo validation,
+# agent resolution, policy rendering, session/environment contract,
+# process model, denial sidecar.
 # Runs on the host; every launch renders a real policy.
 set -uo pipefail
 here="${0:A:h}"
-launcher="${here}/../scripts/.local/scripts/sandbox-run"
+launcher="${here}/../../scripts/.local/scripts/sandbox-run"
 tmp=$(mktemp -d)
 stubs="${tmp}/stubs"; work="${tmp}/work"
 mkdir -p "${stubs}" "${work}"
@@ -15,13 +15,13 @@ fail=0
 check() { if eval "$2"; then print "ok   $1"; else print "FAIL $1"; fail=1; fi }
 real_jq=$(command -v jq); real_safehouse=$(command -v safehouse)
 
-# --- SBOX-01: unsafe launch directories -------------------------------------
+# --- unsafe launch directories -------------------------------------
 for dir in / "${HOME}" "${HOME}/dev/.worktrees"; do
     out=$(cd "${dir}" && "${launcher}" claude 2>&1); rc=$?
     check "refuses CWD ${dir}" '(( rc != 0 )) && [[ "$out" == *"${dir}"* ]]'
 done
 
-# --- SBOX-54: host tool preconditions ---------------------------------------
+# --- host tool preconditions ---------------------------------------
 out=$(cd "${work}" && PATH="${stubs}:/bin" "${launcher}" claude 2>&1); rc=$?
 check "missing jq is named" '(( rc != 0 )) && [[ "$out" == *jq* ]]'
 ln -s "${real_jq}" "${stubs}/jq"
@@ -32,14 +32,14 @@ out=$(cd "${work}" && PATH="${stubs}:/usr/bin:/bin" "${launcher}" claude 2>&1); 
 check "old safehouse names both versions" '(( rc != 0 )) && [[ "$out" == *0.9.0* && "$out" == *0.11.1* ]]'
 rm "${stubs}/safehouse" "${stubs}/jq"
 
-# --- SBOX-04: worktree CWD whose source repo is missing ---------------------
+# --- worktree CWD whose source repo is missing ---------------------
 bogus_ws="${HOME}/dev/.worktrees/sbx-test-$$"
 mkdir -p "${bogus_ws}/bogus-repo"
 out=$(cd "${bogus_ws}/bogus-repo" && "${launcher}" claude 2>&1); rc=$?
 rm -rf "${bogus_ws}"
 check "bogus worktree repo is named" '(( rc != 0 )) && [[ "$out" == *bogus-repo* ]]'
 
-# --- SBOX-50: rendered policy = generator header, then the scope file -------
+# --- rendered policy = generator header, then the scope file -------
 policy=$(cd "${work}" && SANDBOX_RUN_PRINT_POLICY=1 "${launcher}" claude 2>&1); rc=$?
 gen_line=$(print -r -- "${policy}" | grep -n ';; Source: 00-base.sb' | head -1 | cut -d: -f1)
 scope_line=$(print -r -- "${policy}" | grep -n ';; ws-scope.sb' | head -1 | cut -d: -f1)
@@ -50,7 +50,7 @@ check "print-policy leaves no session behind" '[[ -z "$(ls "${SANDBOX_STATE_ROOT
 policy=$(cd "${work}" && SANDBOX_RUN_PRINT_POLICY=1 "${launcher}" opencode 2>&1)
 check "opencode selects the opencode profile" '[[ "$policy" == *"Source: 60-agents/opencode.sb"* ]]'
 
-# --- SBOX-53 / SBOX-17: agent from PATH, environment contract ---------------
+# --- agent from PATH, environment contract ---------------
 cat > "${stubs}/claude" <<'STUB'
 #!/bin/zsh
 env > "${PWD}/env.txt"
@@ -71,7 +71,7 @@ meta="${SANDBOX_STATE_ROOT}/host/meta/${sid}.json"
 check "host meta written with workdir" '[[ "$(jq -r .workdir "$meta")" == "${work:A}" ]]'
 check "SANDBOX_RUN_AGENT_BIN override honoured" '(cd "${work}" && SANDBOX_RUN_AGENT_BIN="${stubs}/claude" "${launcher}" claude) && [[ -s "$envf" ]]'
 
-# opencode absent from PATH: fall back to <brew prefix>/bin/opencode (SBOX-53)
+# opencode absent from PATH: fall back to <brew prefix>/bin/opencode
 mkdir -p "${tmp}/bin"
 printf '#!/bin/zsh\nprint -r -- "$0" > "${PWD}/env.txt"\n' > "${tmp}/bin/opencode"; chmod +x "${tmp}/bin/opencode"
 printf '#!/bin/sh\nexit 0\n' > "${stubs}/brew"; chmod +x "${stubs}/brew"
@@ -80,7 +80,7 @@ rm -f "${envf}"
 (cd "${work}" && PATH="${stubs}:/usr/bin:/bin" "${launcher}" opencode 2>/dev/null); rc=$?
 check "opencode falls back to the brew prefix" '(( rc == 0 )) && [[ "$(cat "$envf")" == "${tmp}/bin/opencode" ]]'
 rm -f "${stubs}/brew" "${stubs}/jq" "${stubs}/safehouse"
-# --- SBOX-09: exit status, signals, supervisor lifetime ---------------------
+# --- exit status, signals, supervisor lifetime ---------------------
 cat > "${stubs}/claude" <<'STUB'
 #!/bin/zsh
 exit 7
@@ -128,7 +128,7 @@ kill -KILL "${lpid}"; wait "${lpid}" 2>/dev/null
 check "SIGKILLed launcher: supervisor exits within 5 s" 'wait_for "! kill -0 ${sup} 2>/dev/null"'
 kill -KILL "$(cat "${work}/agent.pid")" 2>/dev/null
 
-# --- SBOX-40: denial sidecar ---------------------------------------------------
+# --- denial sidecar ---------------------------------------------------
 cat > "${stubs}/claude" <<'STUB'
 #!/bin/zsh
 sleep 3
@@ -172,7 +172,7 @@ check "killed sidecar recorded as sidecar-died host event" 'grep -q "\"event\":\
 check "sidecar restarted exactly once" '(( $(wc -l < "${STUB_LOG_PIDS}") == 2 ))'
 check "no sidecar left after the launch" '! pgrep -f "${stubs}/log-fake" >/dev/null'
 
-# SBOX-09: no capture process 5 s after SIGKILL of the agent or the launcher
+# no capture process 5 s after SIGKILL of the agent or the launcher
 cat > "${stubs}/claude" <<'STUB'
 #!/bin/zsh
 echo $$ > "${PWD}/agent.pid"
@@ -189,7 +189,7 @@ for victim in agent launcher; do
     kill -KILL "$(cat "${work}/agent.pid")" 2>/dev/null
 done
 
-# SBOX-45: host-side truncation of an oversized session log
+# host-side truncation of an oversized session log
 cat > "${stubs}/claude" <<'STUB'
 #!/bin/zsh
 head -c 22000000 /dev/zero | tr '\0' a >> "${SANDBOX_SESSION_LOG}"

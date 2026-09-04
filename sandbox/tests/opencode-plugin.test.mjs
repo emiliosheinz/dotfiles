@@ -1,4 +1,4 @@
-// SBOX-41 second AC: the opencode plugin appends a hook record for a bash
+// The opencode plugin appends a hook record for a bash
 // tool call whose output matches the denial pattern, and nothing otherwise.
 import { readFileSync, mkdtempSync, writeFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const { SandboxDenialsPlugin } = await import(join(here, "../opencode/.config/opencode/plugins/sandbox-denials/plugin.js"));
+const { SandboxDenialsPlugin } = await import(join(here, "../../opencode/.config/opencode/plugins/sandbox-denials/plugin.js"));
 const fixture = JSON.parse(readFileSync(join(here, "fixtures/opencode-tool-after.json"), "utf8"));
 const dir = mkdtempSync(join(tmpdir(), "sbx-plugin-"));
 const log = join(dir, "log.jsonl");

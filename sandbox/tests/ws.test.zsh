@@ -1,9 +1,9 @@
 #!/usr/bin/env zsh
-# SBOX-06 (ws workspace from WS_WORKSPACE) and SBOX-07 (ws verbs inside a
-# session re-dispatch through hostrun with the argv untouched).
+# ws workspace from WS_WORKSPACE, and ws verbs inside a
+# session re-dispatch through hostrun with the argv untouched.
 set -uo pipefail
 here="${0:A:h}"
-ws="${here}/../scripts/.local/scripts/tmux-workspace-manager"
+ws="${here}/../../scripts/.local/scripts/tmux-workspace-manager"
 tmp=$(mktemp -d); trap 'rm -rf "${tmp}"' EXIT
 mkdir -p "${tmp}/bin"
 printf '#!/bin/zsh\nprint -r -- "$@" > "%s/hostrun.argv"\nexit 0\n' "${tmp}" > "${tmp}/bin/hostrun"; chmod +x "${tmp}/bin/hostrun"

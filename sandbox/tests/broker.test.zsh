@@ -1,11 +1,11 @@
 #!/usr/bin/env zsh
-# hostrun + hostrun-broker unit tests (SBOX-19/30–36): the broker runs
+# hostrun + hostrun-broker unit tests: the broker runs
 # directly (no launchd) against a temp state root with the dialog seam
 # scripted through HOSTRUN_DIALOG.
 set -uo pipefail
 here="${0:A:h}"
-hostrun="${here}/../scripts/.local/scripts/hostrun"
-broker="${here}/../scripts/.local/scripts/hostrun-broker"
+hostrun="${here}/../../scripts/.local/scripts/hostrun"
+broker="${here}/../../scripts/.local/scripts/hostrun-broker"
 tmp=$(mktemp -d); trap 'rm -rf "${tmp}"' EXIT
 export SANDBOX_STATE_ROOT="${tmp}/state" HOSTRUN_PLIST="${tmp}/local.hostrun.plist" HOSTRUN_DEADLINE=4
 root="${SANDBOX_STATE_ROOT}"
@@ -43,7 +43,7 @@ S1="1000-11"; S2="1000-22"
 mk_session "${S1}" wsA; mk_session "${S2}" wsB
 rm -f "${DIALOG_CALLS}"
 
-# --- SBOX-30: approve → direct exec, passthrough; deny → 126, not run ------
+# --- approve → direct exec, passthrough; deny → 126, not run ------
 answer approve
 argv_r1=(/bin/sh -c 'printf out; printf err >&2; printf "%s" "$HOME"; exit 3')
 submit "${S1}" "${tmp}/r1" "${argv_r1[@]}"
@@ -70,16 +70,16 @@ check "dialog timeout: 124, message, command not run" '[[ "$(cat "${tmp}/r5.rc")
 check "timeout logged with decision timeout and rc 124" '[[ "$(broker_log | tail -1 | jq -r .decision)" == timeout && "$(broker_log | tail -1 | jq -r .rc)" == 124 ]]'
 check "default deadline is 30 s in hostrun and the broker" 'grep -q "HOSTRUN_DEADLINE:-30" "${hostrun}" && grep -q "HOSTRUN_DEADLINE:-30" "${broker}"'
 
-# --- SBOX-34: approval after the mtime-derived deadline does not run --------
+# --- approval after the mtime-derived deadline does not run --------
 answer approve; print 5 > "${DIALOG_SLEEP}"
 submit "${S2}" "${tmp}/r6" touch "${tmp}/ran-late"
 rm -f "${DIALOG_SLEEP}"
 check "approve after deadline: timeout, not run" '[[ "$(cat "${tmp}/r6.rc")" == 124 && ! -e "${tmp}/ran-late" ]]'
 check "dialog give-up bounded by the deadline (>= 5)" 'tail -1 "${DIALOG_CALLS}" | awk -F"|" "{exit !(\$3 >= 5)}"'
 
-# --- SBOX-32: auto-approve list -----------------------------------------------
+# --- auto-approve list -----------------------------------------------
 expected_default=$'^open https://[^ ]+$\n^ws wt add [A-Za-z0-9][A-Za-z0-9._-]*( -b [A-Za-z0-9][A-Za-z0-9._/-]*)?$'
-check "shipped default list: exactly the two spec patterns" '[[ "$(grep -v "^#" "${here}/auto-approve.default")" == "${expected_default}" ]]'
+check "shipped default list: only open https:// and ws wt add" '[[ "$(grep -v "^#" "${here}/../auto-approve.default")" == "${expected_default}" ]]'
 printf '# comment\n^open https://[^ ]+$\n^/usr/bin/true$\n' > "${root}/host/auto-approve"
 n=$(calls)
 submit "${S2}" "${tmp}/r7" /usr/bin/true
@@ -96,7 +96,7 @@ submit "${S2}" "${tmp}/r8" /usr/bin/true
 check "bad regex line: fail closed, dialog called" '[[ "$(calls)" == $((n+1)) ]]'
 printf '^/usr/bin/true$\n' > "${root}/host/auto-approve"
 
-# --- SBOX-36: storm guard ----------------------------------------------------
+# --- storm guard ----------------------------------------------------
 S3="1000-33"; mk_session "${S3}" wsC; rm -f "${DIALOG_CALLS}"
 answer deny
 submit "${S3}" "${tmp}/s1" /bin/echo one
@@ -111,7 +111,7 @@ n=$(calls); answer approve
 submit "${S3}" "${tmp}/s5" /bin/echo five
 check "storm window expired (last non-approval > 10 min ago): prompts again" '[[ "$(calls)" == $((n+1)) && "$(cat "${tmp}/s5.out")" == five ]]'
 
-# --- SBOX-35: isolation and immutability -------------------------------------
+# --- isolation and immutability -------------------------------------
 answer approve
 S4="1000-44"; mk_session "${S4}" wsD
 (SANDBOX_SESSION_ID="${S1}" zsh "${hostrun}" /bin/echo from-one > "${tmp}/c1.out" 2>/dev/null; print $? > "${tmp}/c1.rc") &
@@ -197,7 +197,7 @@ env -i PATH=/bin:/usr/sbin:/sbin HOME="${HOME}" SANDBOX_STATE_ROOT="${root}" HOS
 wait "${hp}"
 check "broker finds jq without /usr/bin or brew on the inherited PATH" '[[ "$(cat "${tmp}/lp.rc")" == 0 && "$(cat "${tmp}/lp.out")" == launchd-path ]]'
 
-# --- SBOX-34 second AC / no broker ---------------------------------------------
+# --- no broker installed / broker not waking ---------------------------------------------
 start=$SECONDS
 SANDBOX_SESSION_ID="${S1}" HOSTRUN_PLIST=/nonexistent zsh "${hostrun}" /usr/bin/true 2> "${tmp}/n.err"; rc=$?
 check "job definition absent: 127 within 5 s with message" '(( rc == 127 && SECONDS - start <= 5 )) && [[ "$(cat "${tmp}/n.err")" == "hostrun: host broker not installed" ]]'

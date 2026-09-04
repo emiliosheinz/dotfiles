@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # sandbox-note "<want>" ["<why>"]: an agent's own report of a capability it
-# needed but could not use inside the sandbox (SBOX-42). Appends a `note`
+# needed but could not use inside the sandbox. Appends a `note`
 # record to the session's denial log; exits 0. Outside a session it is a
 # no-op so instructions can call it unconditionally.
 if [[ -z "${1:-}" ]]; then

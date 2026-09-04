@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# install-broker.zsh unit test (SBOX-62): renders against a temp HOME with a
+# install-broker.zsh unit test: renders against a temp HOME with a
 # launchctl stub; running twice leaves the same end state and never
 # overwrites an existing auto-approve list.
 set -uo pipefail
@@ -14,14 +14,14 @@ chmod +x "${tmp}/bin/launchctl"
 export LAUNCHCTL_CALLS="${tmp}/calls"
 fail=0
 check() { if eval "$2"; then print "ok   $1"; else print "FAIL $1"; fail=1; fi }
-run() { (export HOME="${tmp}/home" PATH="${tmp}/bin:${PATH}"; zsh "${here}/install-broker.zsh" >/dev/null) }
+run() { (export HOME="${tmp}/home" PATH="${tmp}/bin:${PATH}"; zsh "${here}/../install-broker.zsh" >/dev/null) }
 
 plist="${tmp}/home/Library/LaunchAgents/local.hostrun.plist"
 approve="${tmp}/home/.local/state/agent-sandbox/host/auto-approve"
 run; rc=$?
 check "first run: exit 0, plist rendered and lint-clean" '(( rc == 0 )) && plutil -lint -s "${plist}"'
 check "placeholder replaced with the real HOME in WatchPaths" '! grep -q SANDBOX_HOME_DIR "${plist}" && grep -q "<string>${tmp}/home/.local/state/agent-sandbox/inbox</string>" "${plist}"'
-check "auto-approve seeded from the default list" 'cmp -s "${approve}" "${here}/auto-approve.default"'
+check "auto-approve seeded from the default list" 'cmp -s "${approve}" "${here}/../auto-approve.default"'
 check "job booted out then bootstrapped" '[[ "$(sed -n 1p "${LAUNCHCTL_CALLS}")" == "bootout gui/$(id -u)/local.hostrun" && "$(sed -n 2p "${LAUNCHCTL_CALLS}")" == "bootstrap gui/$(id -u) ${plist}" ]]'
 
 print '^custom$' > "${approve}"

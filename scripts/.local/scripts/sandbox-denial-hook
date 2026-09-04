@@ -2,7 +2,7 @@
 # sandbox-denial-hook: Claude Code PostToolUse / PostToolUseFailure hook
 # (matcher Bash). Reads the hook JSON on stdin; when the tool's stderr,
 # stdout or error matches the denial pattern, appends a `hook` record to the
-# session's denial log (SBOX-41). Always exits 0; a no-op outside a sandbox
+# session's denial log. Always exits 0; a no-op outside a sandbox
 # session, without jq, on malformed input, or once the log reaches its cap.
 [[ -n "${SANDBOX_SESSION_LOG:-}" ]] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
