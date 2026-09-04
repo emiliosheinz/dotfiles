@@ -68,9 +68,8 @@ ws() {
 }
 
 # Sandboxed agents — run claude and opencode under sandbox-exec.
-# Uses ~/dotfiles/sandbox/agents.sb via the sandbox-run wrapper.
-# Workdirs under ~/dev/ and ~/dotfiles/ need no extra config; all other
-# paths get ancestor literals injected automatically at launch time.
+# sandbox-run renders the policy with agent-safehouse plus
+# ~/dotfiles/sandbox/ws-scope.sb; `command claude` is the break-glass path.
 if [[ -x "${HOME}/.local/scripts/sandbox-run" ]]; then
   function claude() {
     sandbox-run claude --dangerously-skip-permissions "$@"
