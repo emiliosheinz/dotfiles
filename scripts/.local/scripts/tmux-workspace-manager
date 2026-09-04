@@ -240,6 +240,13 @@ remove_workspace_worktrees() {
 }
 
 resolve_workspace() {
+    # A launcher-provided workspace (sandbox-run exports WS_WORKSPACE inside
+    # the sandbox, the hostrun broker sets it on the host) wins over tmux,
+    # which is unreachable from inside.
+    if [[ -n "${WS_WORKSPACE:-}" ]]; then
+        printf '%s\n' "$WS_WORKSPACE"
+        return 0
+    fi
     # Backstage sessions are named `backstage-<parent>`. Derive the parent by
     # stripping the prefix — the naming convention survives tmux restore,
     # whereas the @parent_session user option does not.
