@@ -1,0 +1,6 @@
+# hostrun auto-approve list: one anchored extended regex per line, matched
+# against the shell-quoted command line. Copied to
+# ~/.local/state/agent-sandbox/host/auto-approve by the install step only
+# when absent; edit that file on the host, never from inside.
+^open https://[^ ]+$
+^ws wt add [A-Za-z0-9][A-Za-z0-9._-]*( -b [A-Za-z0-9][A-Za-z0-9._/-]*)?$
