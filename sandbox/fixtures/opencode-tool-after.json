@@ -1,0 +1,14 @@
+{
+  "_source": "shape per @opencode-ai/plugin 1.14.48 dist/index.d.ts `tool.execute.after`; a live capture was not possible (Copilot licence refused on 2026-09-03), see state.md AD-39",
+  "input": {
+    "tool": "bash",
+    "sessionID": "ses_fixture",
+    "callID": "call_fixture",
+    "args": { "command": "cat ~/.ssh/id_ed25519", "description": "Read the ssh key" }
+  },
+  "output": {
+    "title": "cat ~/.ssh/id_ed25519",
+    "output": "cat: /Users/x/.ssh/id_ed25519: Operation not permitted\n",
+    "metadata": { "exit": 1, "description": "Read the ssh key" }
+  }
+}
