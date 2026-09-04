@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # The smoke harness names a missing precondition and reports a
-# mismatching row with its AC id, command, expected and actual outcome.
+# mismatching row with its label, command, expected and actual outcome.
 set -uo pipefail
 smoke="${0:A:h}/../smoke.zsh"
 fail=0

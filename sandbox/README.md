@@ -39,7 +39,7 @@ safehouse --stdout --workdir=<cwd> \
 
 and passes the resulting file to `sandbox-exec -f`. The agent name selects
 the generator's agent profile (`~/.claude`, `~/.config/opencode` state). The
-scope file is the per-launch dynamic block followed by `overrides.sb`:
+appended file is a per-launch dynamic block followed by `overrides.sb`:
 
 1. **Workspace scope** (dynamic). `~/dev` launches: `~/dev` writable, every
    repo working tree read-only with its `.git` writable, `.worktrees` denied
@@ -213,6 +213,8 @@ after changes.
    (Seatbelt forbids a nested sandbox), so the Playwright MCP must be
    registered with that flag; `opencode.json` already does, for Claude run
    `claude mcp add -s user playwright -- npx @playwright/mcp@latest --no-sandbox`.
+   Headed Chrome shows an "unsupported command-line flag" bar because of it;
+   add `--headless` if you do not need to watch the browser.
    For a headed browser on the host, `agent-chrome` (alias) starts Chrome
    with `--remote-debugging-port=9222 --user-data-dir=~/.local/state/agent-chrome`;
    inside, `curl -s http://127.0.0.1:9222/json/version` returns the

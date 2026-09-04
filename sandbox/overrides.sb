@@ -45,9 +45,9 @@
     (local unix-socket (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/pw-[^/]+/"))
     (remote unix-socket (path-regex #"^(/private)?/var/folders/[^/]+/[^/]+/T/pw-[^/]+/")))
 (allow system-sched)                               ;; setpriority on self; zsh `nice` in prompt sections
-;; /bin/ps is setuid and Seatbelt forbids sugid exec inside a sandbox; ps only
-;; reads process state, so it runs unsandboxed. pgrep/kill are
-;; covered by the process-control toggle.
+;; /bin/ps is setuid and Seatbelt forbids setuid exec inside a sandbox; ps
+;; only reads process state, so it runs unsandboxed. pgrep/kill are covered
+;; by the process-control toggle.
 (allow process-exec (with no-sandbox) (literal "/bin/ps"))
 
 ;; ---------------------------------------------------------------------------
@@ -83,9 +83,9 @@
     (home-subpath "/.config/git")
     (home-literal "/.ssh/config")
     (home-subpath "/Library/LaunchAgents")
-    ;; launcher, scripts, hooks, broker. The
-    ;; generator re-grants the claude launcher's resolved symlink target, so
-    ;; the stow source is named too; edit it from the host.
+    ;; launcher, scripts, hooks, broker. The generator re-grants the claude
+    ;; launcher's resolved symlink target, so the stow source is named too;
+    ;; edit it from the host.
     (home-subpath "/.local/bin")
     (home-subpath "/.local/scripts")
     (home-prefix "/dotfiles/scripts/.local/bin/claude")

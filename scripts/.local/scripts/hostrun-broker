@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # hostrun-broker: host side of `hostrun`, started by launchd when a marker
-# lands in the shared inbox (design §5). Trusts nothing from inside: the
+# lands in the shared inbox. Trusts nothing from inside: the
 # request path comes from the marker name, workspace and workdir from the
 # launcher-written host meta, the deadline from the request file's mtime.
 # Decides storm → auto-approve list → dialog, executes the argv directly
