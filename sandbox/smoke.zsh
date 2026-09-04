@@ -140,6 +140,8 @@ rows=(
     "SBOX-17|default|ok|[[ \$PATH == ~/dev/.worktrees/${WS}/.tools/bin:* ]]"
     "SBOX-17|default|ok|[[ -z \${NPM_CONFIG_PREFIX:-} ]]"
     "SBOX-44|default|ok|echo '{\"src\":\"probe\"}' >> \"\$SANDBOX_SESSION_LOG\""
+    "SBOX-40|default|ok|head -c1 ~/.ssh/id_ed25519 2>/dev/null; for i in {1..20}; do grep -q '\"src\":\"kernel\".*\"path\":\"'\$HOME'/.ssh/id_ed25519\"' \"\$SANDBOX_SESSION_LOG\" && exit 0; sleep 0.5; done; exit 1"
+    "SBOX-42|default|ok|sandbox-note 'docker ps' 'is the stack up' && grep -q '\"src\":\"note\".*\"want\":\"docker ps\"' \"\$SANDBOX_SESSION_LOG\""
     "SBOX-44|default|fail|touch ~/.local/scripts/sandbox-denial-hook"
     "SBOX-51|default|ok|head -c1 \"\$(brew --prefix)/bin/gh\""
     "SBOX-51|default|ok|head -c1 ~/.config/ccstatusline/settings.json"

@@ -22,8 +22,9 @@
 #   sandbox-run opencode [args...]
 #
 # Debug/test seams: SANDBOX_RUN_PRINT_POLICY=1 prints the rendered policy and
-# exits; SANDBOX_RUN_AGENT_BIN overrides the agent binary; SANDBOX_STATE_ROOT
-# overrides the state root (tests only).
+# exits; SANDBOX_RUN_AGENT_BIN overrides the agent binary; SANDBOX_RUN_LOG_BIN
+# overrides /usr/bin/log for the denial sidecar and SANDBOX_STATE_ROOT the
+# state root (tests only).
 
 set -euo pipefail
 
@@ -37,6 +38,8 @@ readonly SCOPE_SRC="${HOME_DIR}/dotfiles/sandbox/ws-scope.sb"
 readonly STATE_ROOT="${SANDBOX_STATE_ROOT:-${HOME_DIR}/.local/state/agent-sandbox}"
 readonly LOG_CAP_BYTES=$(( 20 * 1024 * 1024 ))
 readonly LAUNCHER_PID=$$
+readonly LOG_BIN="${SANDBOX_RUN_LOG_BIN:-/usr/bin/log}"
+readonly DENIAL_PREDICATE='eventMessage CONTAINS "Sandbox:" AND eventMessage CONTAINS "deny("'
 
 die() { print -u2 "sandbox-run: $*"; exit 1 }
 
@@ -230,8 +233,42 @@ write_meta 0
 
 cleanup_session() {
     rm -rf "${SESSION_DIR}/requests" "${SESSION_DIR}/results"
-    rm -f "${SCOPE_FILE}" "${POLICY_FILE}"
+    rm -f "${SCOPE_FILE}" "${POLICY_FILE}" "${STATE_ROOT}/host/policy/${SESSION_ID}.sidecar.err"
 }
+
+# --- denial sidecar (SBOX-40) -------------------------------------------------
+# Streams kernel sandbox denials from the unified log (host only: `log` cannot
+# run sandboxed) into the session log as `kernel` records. The stream is
+# system-wide, so concurrent sessions capture the same denials; the report
+# dedupes them.
+readonly SIDECAR_ERR="${STATE_ROOT}/host/policy/${SESSION_ID}.sidecar.err"
+sidecar() {
+    trap '' INT HUP
+    "${LOG_BIN}" stream --style ndjson --predicate "${DENIAL_PREDICATE}" 2>"${SIDECAR_ERR}" \
+        | jq -R -c --unbuffered --arg sid "${SESSION_ID}" --arg ws "${ACTIVE_BRANCH:-${WORKDIR}}" '
+            (fromjson? // empty)
+            | (.eventMessage // "") as $m
+            | ($m | capture("^Sandbox: (?<proc>.+)\\((?<pid>[0-9]+)\\) deny\\([0-9]+\\) (?<op>[^ ]+) ?(?<path>.*)$")) as $d
+            | {ts: (.timestamp | sub(" "; "T") | sub("\\.[0-9]+"; "") | sub("(?<z>[+-][0-9]{2})(?<zz>[0-9]{2})$"; "\(.z):\(.zz)")),
+               src: "kernel", session: $sid, ws: $ws,
+               proc: $d.proc, pid: ($d.pid | tonumber), op: $d.op, path: $d.path, msg: $m}
+        ' >> "${SESSION_LOG}"
+}
+start_sidecar() {
+    sidecar &
+    SIDECAR_PID=$!
+}
+stop_sidecar() {
+    [[ -n "${SIDECAR_PID:-}" ]] || return 0
+    pkill -P "${SIDECAR_PID}" 2>/dev/null || true
+    kill "${SIDECAR_PID}" 2>/dev/null || true
+    SIDECAR_PID=""
+}
+sidecar_alive() { [[ -n "${SIDECAR_PID:-}" ]] && kill -0 "${SIDECAR_PID}" 2>/dev/null && pgrep -q -P "${SIDECAR_PID}" }
+
+# The sidecar is checked after the policy render below, so a stream that
+# fails to subscribe has had the render's second to die without adding wait.
+start_sidecar
 
 # --- policy -------------------------------------------------------------------
 {
@@ -258,15 +295,22 @@ safehouse_args=(
 (( ${#ro_dirs} )) && safehouse_args+=(--add-dirs-ro="${(j.:.)ro_dirs}")
 # The agent name (not the binary path) selects the generator's agent profile.
 if ! safehouse "${safehouse_args[@]}" -- "${AGENT}" > "${POLICY_FILE}"; then
+    stop_sidecar
     cleanup_session
     die "policy generation failed"
 fi
 
 if [[ -n "${SANDBOX_RUN_PRINT_POLICY:-}" ]]; then
     cat "${POLICY_FILE}"
+    stop_sidecar
     cleanup_session
     rm -rf "${SESSION_DIR}" "${STATE_ROOT}/host/meta/${SESSION_ID}.json"
     exit 0
+fi
+
+if ! sidecar_alive; then
+    print -u2 "sandbox-run: warning: denial capture unavailable (${LOG_BIN} stream failed)"
+    stop_sidecar
 fi
 
 # --- environment contract -----------------------------------------------------
@@ -287,10 +331,11 @@ export COLUMNS
 # The agent is a child so terminal signals can be forwarded, its exit status
 # propagated, and the session queue removed afterwards. The supervisor is a
 # separate process that outlives a SIGKILLed launcher: it enforces the
-# session-log cap host-side and stops once the agent or the launcher is gone.
+# session-log cap host-side, restarts a dead sidecar once (recording every
+# death), and stops both once the agent or the launcher is gone.
 supervise() {
     trap '' INT HUP TERM
-    local size
+    local size restarts=0
     while kill -0 "${AGENT_PID}" 2>/dev/null && kill -0 "${LAUNCHER_PID}" 2>/dev/null; do
         sleep 1
         size=$(stat -f %z "${SESSION_LOG}" 2>/dev/null || print 0)
@@ -298,7 +343,17 @@ supervise() {
             tail -c "${LOG_CAP_BYTES}" "${SESSION_LOG}" > "${SESSION_LOG}.tmp" && mv -f "${SESSION_LOG}.tmp" "${SESSION_LOG}"
             host_event log-truncated
         fi
+        if [[ -n "${SIDECAR_PID:-}" ]] && ! sidecar_alive; then
+            host_event sidecar-died
+            stop_sidecar
+            if (( restarts == 0 )); then
+                restarts=1
+                start_sidecar
+            fi
+        fi
     done
+    stop_sidecar
+    rm -f "${SIDECAR_ERR}"
 }
 
 forward() { kill -"$1" "${AGENT_PID}" 2>/dev/null || true }
@@ -319,6 +374,10 @@ while kill -0 "${AGENT_PID}" 2>/dev/null; do
     wait "${AGENT_PID}"
     rc=$?
 done
-kill -KILL "${SUPERVISOR_PID}" 2>/dev/null
+# The supervisor notices the agent is gone within a second, stops the
+# sidecar and exits; wait for it so no capture process outlives the launch.
+while kill -0 "${SUPERVISOR_PID}" 2>/dev/null; do
+    wait "${SUPERVISOR_PID}"
+done
 cleanup_session
 exit "${rc}"

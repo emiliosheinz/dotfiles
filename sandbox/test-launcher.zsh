@@ -127,4 +127,47 @@ sup=$(jq -r .supervisor_pid "${SANDBOX_STATE_ROOT}/host/meta/${sid}.json")
 kill -KILL "${lpid}"; wait "${lpid}" 2>/dev/null
 check "SIGKILLed launcher: supervisor exits within 5 s" 'wait_for "! kill -0 ${sup} 2>/dev/null"'
 kill -KILL "$(cat "${work}/agent.pid")" 2>/dev/null
+
+# --- SBOX-40: denial sidecar ---------------------------------------------------
+cat > "${stubs}/claude" <<'STUB'
+#!/bin/zsh
+sleep 3
+exit 0
+STUB
+printf '#!/bin/sh\nexit 1\n' > "${stubs}/log-fails"; chmod +x "${stubs}/log-fails"
+rm -f "${work}/env.txt"
+out=$(cd "${work}" && PATH="${stubs}:${PATH}" SANDBOX_RUN_LOG_BIN="${stubs}/log-fails" "${launcher}" claude 2>&1); rc=$?
+check "sidecar cannot start: warning printed, agent still launched" '(( rc == 0 )) && [[ "$out" == *"denial capture unavailable"* ]]'
+
+export STUB_LOG_PIDS="${work}/logpids.txt"; rm -f "${STUB_LOG_PIDS}"
+cat > "${stubs}/log-fake" <<'STUB'
+#!/bin/zsh
+print -u2 'Filtering the log data using "composedMessage CONTAINS Sandbox:"'
+print -r -- $$ >> "${STUB_LOG_PIDS}"
+print -r -- '{"timestamp":"2026-09-03 22:02:39.973218-0300","eventMessage":"Sandbox: cat(82503) deny(1) file-read-data /Users/x/.ssh/id_ed25519"}'
+while :; do sleep 1; done
+STUB
+chmod +x "${stubs}/log-fake"
+(cd "${work}" && PATH="${stubs}:${PATH}" SANDBOX_RUN_LOG_BIN="${stubs}/log-fake" "${launcher}" claude 2>/dev/null); rc=$?
+sid=$(ls -t "${SANDBOX_STATE_ROOT}/host/meta" | head -1 | sed 's/\.json$//')
+rec=$(grep '"src":"kernel"' "${SANDBOX_STATE_ROOT}/sessions/${sid}/log.jsonl" | head -1)
+check "fake denial line parsed into a kernel record" '[[ -n "$rec" ]] && [[ "$(print -r -- "$rec" | jq -r ".op")" == file-read-data && "$(print -r -- "$rec" | jq -r ".path")" == /Users/x/.ssh/id_ed25519 && "$(print -r -- "$rec" | jq -r ".pid")" == 82503 && "$(print -r -- "$rec" | jq -r ".proc")" == cat ]]'
+check "kernel record tagged with session and ISO timestamp" '[[ "$(print -r -- "$rec" | jq -r ".session")" == "$sid" && "$(print -r -- "$rec" | jq -r ".ts")" == 2026-09-03T22:02:39-03:00 ]]'
+check "sidecar stopped after the agent exited" '! pgrep -f "${stubs}/log-fake" >/dev/null'
+
+cat > "${stubs}/claude" <<'STUB'
+#!/bin/zsh
+sleep 6
+exit 0
+STUB
+rm -f "${STUB_LOG_PIDS}"
+(cd "${work}" && PATH="${stubs}:${PATH}" SANDBOX_RUN_LOG_BIN="${stubs}/log-fake" "${launcher}" claude 2>/dev/null) &
+lpid=$!
+wait_for '[[ -s "${STUB_LOG_PIDS}" ]]'
+sleep 1
+kill -KILL "$(head -1 "${STUB_LOG_PIDS}")"
+wait "${lpid}"
+check "killed sidecar recorded as sidecar-died host event" 'grep -q "\"event\":\"sidecar-died\"" "${SANDBOX_STATE_ROOT}/host/events.jsonl"'
+check "sidecar restarted exactly once" '(( $(wc -l < "${STUB_LOG_PIDS}") == 2 ))'
+check "no sidecar left after the launch" '! pgrep -f "${stubs}/log-fake" >/dev/null'
 exit $fail
