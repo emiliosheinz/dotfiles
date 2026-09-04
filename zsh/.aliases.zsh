@@ -73,7 +73,7 @@ alias agent-chrome='"/Applications/Google Chrome.app/Contents/MacOS/Google Chrom
 
 # Sandboxed agents — run claude and opencode under sandbox-exec.
 # sandbox-run renders the policy with agent-safehouse plus
-# ~/dotfiles/sandbox/ws-scope.sb; `command claude` is the break-glass path.
+# ~/dotfiles/sandbox/overrides.sb; `command claude` is the break-glass path.
 if [[ -x "${HOME}/.local/scripts/sandbox-run" ]]; then
   function claude() {
     sandbox-run claude --dangerously-skip-permissions "$@"

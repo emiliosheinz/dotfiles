@@ -172,7 +172,7 @@ rows=(
     "tool-reads|default|ok|pbpaste >/dev/null"
     # Rendered-policy assertions
     "secrets|default|ok|for p in 'home-prefix \"/.ssh/id_\"' 'home-subpath \"/.gnupg\"' 'home-subpath \"/.aws\"' 'home-subpath \"/.config/gcloud\"' 'Support/Google/Chrome\"' 'Support/Firefox\"' 'Support/Safari\"'; do grep -qF -- \"\$p\" \$SMOKE_POLICY || exit 1; done"
-    "policy-layout|default|ok|grep -q ';; Source: 00-base.sb' \$SMOKE_POLICY && grep -q ';; ws-scope.sb' \$SMOKE_POLICY"
+    "policy-layout|default|ok|grep -q ';; Source: 00-base.sb' \$SMOKE_POLICY && grep -q ';; overrides.sb' \$SMOKE_POLICY"
     "policy-layout|default|ok|[[ ! -e ~/dotfiles/sandbox/agents.sb ]]"
     "portable-paths|dotfiles|ok|! git grep -q '/User[s]/' -- sandbox scripts"
 )

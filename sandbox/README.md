@@ -4,7 +4,7 @@ Claude Code and opencode run under a macOS Seatbelt policy applied by
 `sandbox-run` (the `claude` / `opencode` shell functions in
 `zsh/.aliases.zsh`). The base policy is generated at every launch by
 [agent-safehouse](https://github.com/eugene1g/agent-safehouse); this repo owns
-the launcher, the rules appended after the generated ones (`ws-scope.sb`),
+the launcher, the rules appended after the generated ones (`overrides.sb`),
 the `hostrun` broker and the denial log.
 
 > `sandbox-exec` is deprecated since macOS 10.15 but still works on macOS 26.
@@ -18,7 +18,7 @@ unsandboxed.
 | Path | Role |
 |---|---|
 | `scripts/.local/scripts/sandbox-run` | launcher: preconditions, workspace scope, session, policy, sidecar, child process |
-| `sandbox/ws-scope.sb` | repo-owned rules appended after every generated rule |
+| `sandbox/overrides.sb` | repo-owned rules appended after every generated rule |
 | `scripts/.local/bin/claude` | host-owned launcher that runs the newest installed Claude Code version |
 | `scripts/.local/scripts/hostrun`, `hostrun-broker` | request/approve/execute channel to the host |
 | `sandbox/local.hostrun.plist.template`, `sandbox/install-broker.zsh`, `sandbox/auto-approve.default` | broker launchd job, installer, initial auto-approve list |
@@ -39,7 +39,7 @@ safehouse --stdout --workdir=<cwd> \
 
 and passes the resulting file to `sandbox-exec -f`. The agent name selects
 the generator's agent profile (`~/.claude`, `~/.config/opencode` state). The
-scope file is the per-launch dynamic block followed by `ws-scope.sb`:
+scope file is the per-launch dynamic block followed by `overrides.sb`:
 
 1. **Workspace scope** (dynamic). `~/dev` launches: `~/dev` writable, every
    repo working tree read-only with its `.git` writable, `.worktrees` denied

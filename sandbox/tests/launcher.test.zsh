@@ -42,7 +42,7 @@ check "bogus worktree repo is named" '(( rc != 0 )) && [[ "$out" == *bogus-repo*
 # --- rendered policy = generator header, then the scope file -------
 policy=$(cd "${work}" && SANDBOX_RUN_PRINT_POLICY=1 "${launcher}" claude 2>&1); rc=$?
 gen_line=$(print -r -- "${policy}" | grep -n ';; Source: 00-base.sb' | head -1 | cut -d: -f1)
-scope_line=$(print -r -- "${policy}" | grep -n ';; ws-scope.sb' | head -1 | cut -d: -f1)
+scope_line=$(print -r -- "${policy}" | grep -n ';; overrides.sb' | head -1 | cut -d: -f1)
 check "print-policy exits 0 with generator header" '(( rc == 0 )) && [[ -n "$gen_line" ]]'
 check "scope rules follow the generator rules" '[[ -n "$scope_line" ]] && (( scope_line > gen_line ))'
 check "print-policy selects the claude profile" '[[ "$policy" == *"Source: 60-agents/claude-code.sb"* ]]'

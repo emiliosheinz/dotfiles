@@ -1,4 +1,4 @@
-;; ws-scope.sb — repo-owned scope appended after the agent-safehouse policy.
+;; overrides.sb — repo-owned rules appended after the agent-safehouse policy.
 ;;
 ;; sandbox-run renders this file after its per-launch dynamic block (workspace
 ;; scope + per-session grants) and hands the result to the generator with
