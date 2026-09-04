@@ -1,0 +1,73 @@
+#!/usr/bin/env zsh
+# sandbox-run unit tests: CWD refusal (SBOX-01), tool preconditions (SBOX-54),
+# repo validation (SBOX-04), agent resolution (SBOX-53), policy rendering
+# (SBOX-50), session/environment contract (SBOX-17), process model (SBOX-09).
+# Runs on the host; every launch renders a real policy.
+set -uo pipefail
+here="${0:A:h}"
+launcher="${here}/../scripts/.local/scripts/sandbox-run"
+tmp=$(mktemp -d)
+stubs="${tmp}/stubs"; work="${tmp}/work"
+mkdir -p "${stubs}" "${work}"
+export SANDBOX_STATE_ROOT="${tmp}/state"
+trap 'rm -rf "${tmp}"' EXIT
+fail=0
+check() { if eval "$2"; then print "ok   $1"; else print "FAIL $1"; fail=1; fi }
+real_jq=$(command -v jq); real_safehouse=$(command -v safehouse)
+
+# --- SBOX-01: unsafe launch directories -------------------------------------
+for dir in / "${HOME}" "${HOME}/dev/.worktrees"; do
+    out=$(cd "${dir}" && "${launcher}" claude 2>&1); rc=$?
+    check "refuses CWD ${dir}" '(( rc != 0 )) && [[ "$out" == *"${dir}"* ]]'
+done
+
+# --- SBOX-54: host tool preconditions ---------------------------------------
+out=$(cd "${work}" && PATH="${stubs}:/bin" "${launcher}" claude 2>&1); rc=$?
+check "missing jq is named" '(( rc != 0 )) && [[ "$out" == *jq* ]]'
+ln -s "${real_jq}" "${stubs}/jq"
+out=$(cd "${work}" && PATH="${stubs}:/usr/bin:/bin" "${launcher}" claude 2>&1); rc=$?
+check "missing safehouse is named" '(( rc != 0 )) && [[ "$out" == *safehouse* ]]'
+printf '#!/bin/sh\necho "Agent Safehouse 0.9.0"\n' > "${stubs}/safehouse"; chmod +x "${stubs}/safehouse"
+out=$(cd "${work}" && PATH="${stubs}:/usr/bin:/bin" "${launcher}" claude 2>&1); rc=$?
+check "old safehouse names both versions" '(( rc != 0 )) && [[ "$out" == *0.9.0* && "$out" == *0.11.1* ]]'
+rm "${stubs}/safehouse" "${stubs}/jq"
+
+# --- SBOX-04: worktree CWD whose source repo is missing ---------------------
+bogus_ws="${HOME}/dev/.worktrees/sbx-test-$$"
+mkdir -p "${bogus_ws}/bogus-repo"
+out=$(cd "${bogus_ws}/bogus-repo" && "${launcher}" claude 2>&1); rc=$?
+rm -rf "${bogus_ws}"
+check "bogus worktree repo is named" '(( rc != 0 )) && [[ "$out" == *bogus-repo* ]]'
+
+# --- SBOX-50: rendered policy = generator header, then the scope file -------
+policy=$(cd "${work}" && SANDBOX_RUN_PRINT_POLICY=1 "${launcher}" claude 2>&1); rc=$?
+gen_line=$(print -r -- "${policy}" | grep -n ';; Source: 00-base.sb' | head -1 | cut -d: -f1)
+scope_line=$(print -r -- "${policy}" | grep -n ';; ws-scope.sb' | head -1 | cut -d: -f1)
+check "print-policy exits 0 with generator header" '(( rc == 0 )) && [[ -n "$gen_line" ]]'
+check "scope rules follow the generator rules" '[[ -n "$scope_line" ]] && (( scope_line > gen_line ))'
+check "print-policy selects the claude profile" '[[ "$policy" == *"Source: 60-agents/claude-code.sb"* ]]'
+check "print-policy leaves no session behind" '[[ -z "$(ls "${SANDBOX_STATE_ROOT}/sessions" 2>/dev/null)" ]]'
+policy=$(cd "${work}" && SANDBOX_RUN_PRINT_POLICY=1 "${launcher}" opencode 2>&1)
+check "opencode selects the opencode profile" '[[ "$policy" == *"Source: 60-agents/opencode.sb"* ]]'
+
+# --- SBOX-53 / SBOX-17: agent from PATH, environment contract ---------------
+cat > "${stubs}/claude" <<'STUB'
+#!/bin/zsh
+env > "${PWD}/env.txt"
+exit 0
+STUB
+chmod +x "${stubs}/claude"
+(cd "${work}" && PATH="${stubs}:${PATH}" NPM_CONFIG_PREFIX=/nope "${launcher}" claude) ; rc=$?
+envf="${work}/env.txt"
+sid=$(grep '^SANDBOX_SESSION_ID=' "${envf}" 2>/dev/null | cut -d= -f2-)
+check "agent resolved from PATH stub and ran" '(( rc == 0 )) && [[ -s "$envf" ]]'
+check "SANDBOX_SESSION_ID exported" '[[ "$sid" == <->-<-> ]]'
+check "SANDBOX_SESSION_LOG points into the session dir" 'grep -qx "SANDBOX_SESSION_LOG=${SANDBOX_STATE_ROOT}/sessions/${sid}/log.jsonl" "$envf"'
+check "WS_WORKSPACE exported (empty outside ~/dev)" 'grep -qx "WS_WORKSPACE=" "$envf"'
+check "PATH starts with the tooldir" 'grep -q "^PATH=${work:A}/.tools/bin:" "$envf"'
+check "NPM_CONFIG_PREFIX unset" '! grep -q "^NPM_CONFIG_PREFIX=" "$envf"'
+check "session log created" '[[ -f "${SANDBOX_STATE_ROOT}/sessions/${sid}/log.jsonl" ]]'
+meta="${SANDBOX_STATE_ROOT}/host/meta/${sid}.json"
+check "host meta written with workdir" '[[ "$(jq -r .workdir "$meta")" == "${work:A}" ]]'
+check "SANDBOX_RUN_AGENT_BIN override honoured" '(cd "${work}" && SANDBOX_RUN_AGENT_BIN="${stubs}/claude" "${launcher}" claude) && [[ -s "$envf" ]]'
+exit $fail

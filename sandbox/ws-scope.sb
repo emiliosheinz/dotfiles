@@ -23,11 +23,20 @@
     (home-subpath "/.local/share/zinit")           ;; zsh plugin manager (SBOX-12)
     (home-literal "/Library/LaunchAgents")         ;; hostrun detects the broker job definition
     (home-literal "/Library/LaunchAgents/local.hostrun.plist")
+    (home-subpath "/.config/worktrunk")            ;; wt reads its config from zsh startup
+    (home-subpath "/.config/nvim")
+    (home-subpath "/.config/tmux")
+    (home-literal "/.spaceshiprc.zsh")
 )
 (allow file-read* file-write*
     (home-subpath "/.cache")                       ;; XDG cache: zsh compdump, tool caches (SBOX-12)
     (home-subpath "/.oh-my-zsh/cache")             ;; completion cache written on every interactive start
 )
+(allow system-sched)                               ;; setpriority on self; zsh `nice` in prompt sections (SBOX-12)
+;; /bin/ps is setuid and Seatbelt forbids sugid exec inside a sandbox; ps only
+;; reads process state, so it runs unsandboxed (SBOX-10). pgrep/kill are
+;; covered by the process-control toggle.
+(allow process-exec (with no-sandbox) (literal "/bin/ps"))
 
 ;; ---------------------------------------------------------------------------
 ;; 1. Self-governance: nothing inside may change what runs on the host or how
@@ -62,9 +71,14 @@
     (home-subpath "/.config/git")
     (home-literal "/.ssh/config")
     (home-subpath "/Library/LaunchAgents")
-    ;; launcher, scripts, hooks, broker (SBOX-16, SBOX-32, SBOX-44)
+    ;; launcher, scripts, hooks, broker (SBOX-16, SBOX-32, SBOX-44). The
+    ;; generator re-grants the claude launcher's resolved symlink target, so
+    ;; the stow source is named too; edit it from the host.
     (home-subpath "/.local/bin")
     (home-subpath "/.local/scripts")
+    (home-prefix "/dotfiles/scripts/.local/bin/claude")
+    ;; gh auth/config (SBOX-15): token rotation stays a host action
+    (home-subpath "/.config/gh")
 )
 
 ;; Project-level Claude settings in any repository, including the workdir.
