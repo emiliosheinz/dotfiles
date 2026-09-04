@@ -189,38 +189,29 @@ zsh sandbox/smoke.zsh --only kernel-denials
 Every step is idempotent; run the whole list on a new machine and again
 after changes.
 
-1. **Generator and jq**
+1. **Generator, launcher, broker**: `bootstrap.sh` does this on a fresh
+   machine (its "agent sandbox" block). On an existing machine:
    ```zsh
-   brew trust eugene1g/safehouse
-   brew install eugene1g/safehouse/agent-safehouse   # or brew upgrade agent-safehouse
-   brew install jq
-   safehouse --version    # must be >= 0.11.1
-   ```
-2. **Launcher script**: remove the installer's symlink and stow the scripts
-   package (`~/.local/bin/claude` becomes the dotfiles launcher).
-   ```zsh
+   cd ~/dotfiles
+   brew trust eugene1g/safehouse && brew install eugene1g/safehouse/agent-safehouse   # >= 0.11.1; jq too
    [[ -L ~/.local/bin/claude && "$(readlink ~/.local/bin/claude)" != *dotfiles* ]] && rm ~/.local/bin/claude
-   find ~/dotfiles -name .DS_Store -not -path '*/.git/*' -delete   # Finder litter aborts stow
-   cd ~/dotfiles && stow scripts opencode claude zsh
+   find . -name .DS_Store -not -path './.git/*' -delete   # Finder litter aborts stow
+   stow -R scripts opencode claude zsh                    # ~/.local/bin/claude becomes the dotfiles launcher
+   zsh sandbox/install-broker.zsh                         # renders and loads the launchd job; --uninstall removes it
    ```
-3. **Broker**: renders the launchd job with your `$HOME`, seeds
-   `host/auto-approve` only when absent, (re)loads the job.
-   ```zsh
-   zsh ~/dotfiles/sandbox/install-broker.zsh        # --uninstall to remove
-   ```
-4. **Docker Desktop**: Settings → Advanced → enable the default socket
+2. **Docker Desktop**: Settings → Advanced → enable the default socket
    (`/var/run/docker.sock`); Settings → Resources → File Sharing: keep only
    `~/dev`, `/tmp`, `/private`, `/var/folders` (add a path here when a
    compose stack needs it). Start Docker Desktop from inside with
    `hostrun open -a Docker`.
-5. **Optional per-signature ssh approval**: `brew install theseal/ssh-askpass/ssh-askpass`,
+3. **Optional per-signature ssh approval**: `brew install theseal/ssh-askpass/ssh-askpass`,
    then `ssh-add -c ~/.ssh/id_ed25519` (re-add after each login; the agent
    prompts on every signature).
-6. **Headed Chrome for automation**: `agent-chrome` (alias) starts Chrome with
+4. **Headed Chrome for automation**: `agent-chrome` (alias) starts Chrome with
    `--remote-debugging-port=9222 --user-data-dir=~/.local/state/agent-chrome`
    on the host; inside, `curl -s http://127.0.0.1:9222/json/version` returns
    the `webSocketDebuggerUrl` for Playwright's `connectOverCDP`.
-7. **Smoke fixture** (once):
+5. **Smoke fixture** (once):
    ```zsh
    git init ~/dev/sbx-fixture && (cd ~/dev/sbx-fixture && echo fixture > README.md && git add . && git commit -qm init)
    git -C ~/dev/sbx-fixture worktree add -b sbx-a ~/dev/.worktrees/sbx-a/sbx-fixture

@@ -29,6 +29,7 @@ brew install stow
 # Create config symlinks
 echo "📦 Creating config symlinks"
 wait_for_confirmation
+find . -name .DS_Store -not -path './.git/*' -delete   # Finder litter aborts stow
 stow git
 stow scripts
 stow zsh 
@@ -170,6 +171,18 @@ curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.
 # stow symlink with a real file. Re-stow to restore the tracked linkage;
 # caveman is pre-declared in the tracked opencode.json so nothing is lost.
 stow -R opencode
+
+# Agent sandbox: policy generator, dotfiles launcher, hostrun broker
+# (see sandbox/README.md). Idempotent; rerun after pulling changes.
+echo "📦 Setting up the agent sandbox"
+wait_for_confirmation
+brew trust eugene1g/safehouse
+brew install eugene1g/safehouse/agent-safehouse
+# The Claude installer above replaced ~/.local/bin/claude with its own
+# symlink; put the dotfiles launcher back.
+[[ -L ~/.local/bin/claude && "$(readlink ~/.local/bin/claude)" != *dotfiles* ]] && rm ~/.local/bin/claude
+stow -R scripts
+zsh sandbox/install-broker.zsh
 
 # Apps
 echo "📦 Installing Apps"
