@@ -32,6 +32,8 @@ for p in "${HOME}/.homebrew" /opt/homebrew /usr/local; do
     [[ -x "${p}/bin/brew" ]] && { brew_prefix="${p}"; break }
 done
 fixed_path="${HOME}/.local/bin:${HOME}/.local/scripts:${brew_prefix:+${brew_prefix}/bin:}/usr/bin:/bin:/usr/sbin:/sbin"
+# launchd hands the job a system-only PATH; jq may live only under brew.
+export PATH="${brew_prefix:+${brew_prefix}/bin:}/usr/bin:/bin:/usr/sbin:/sbin"
 
 # One broker at a time; launchd serialises, this guards manual runs.
 exec {lock_fd}>"${host}/broker.lock"

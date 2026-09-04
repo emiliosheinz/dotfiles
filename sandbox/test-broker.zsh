@@ -171,6 +171,16 @@ submit "${S2}" "${tmp}/t3" /usr/bin/true; rm -f "${DIALOG_PRE}"
 check "queue removed mid-flight: interrupted logged, hostrun times out" '[[ "$(broker_log | tail -1 | jq -r .decision)" == interrupted && "$(cat "${tmp}/t3.rc")" == 124 ]]'
 mkdir -p "${root}/sessions/${S2}/results"
 
+# --- broker under a launchd-style PATH: jq must not come from the caller -----
+answer approve
+(SANDBOX_SESSION_ID="${S1}" zsh "${hostrun}" /bin/echo launchd-path > "${tmp}/lp.out" 2> "${tmp}/lp.err"; print $? > "${tmp}/lp.rc") &
+hp=$!
+for _ in {1..50}; do [[ -n "$(ls "${root}/inbox" 2>/dev/null)" ]] && break; sleep 0.1; done
+env -i PATH=/bin:/usr/sbin:/sbin HOME="${HOME}" SANDBOX_STATE_ROOT="${root}" HOSTRUN_DIALOG="${HOSTRUN_DIALOG}" \
+    DIALOG_ANSWER="${DIALOG_ANSWER}" DIALOG_CALLS="${DIALOG_CALLS}" DIALOG_SLEEP="${DIALOG_SLEEP}" DIALOG_PRE="${DIALOG_PRE}" zsh "${broker}"
+wait "${hp}"
+check "broker finds jq without /usr/bin or brew on the inherited PATH" '[[ "$(cat "${tmp}/lp.rc")" == 0 && "$(cat "${tmp}/lp.out")" == launchd-path ]]'
+
 # --- SBOX-34 second AC / no broker ---------------------------------------------
 start=$SECONDS
 SANDBOX_SESSION_ID="${S1}" HOSTRUN_PLIST=/nonexistent zsh "${hostrun}" /usr/bin/true 2> "${tmp}/n.err"; rc=$?
