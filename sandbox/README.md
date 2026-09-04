@@ -242,9 +242,9 @@ the date and machine.
 | SBOX-09 Ctrl-C / resize | in the Claude TUI: Ctrl-C interrupts a running tool, a second Ctrl-C prompts to exit; resize the pane and the UI reflows | observed on: |
 | SBOX-14 Docker mounts | inside: `docker run --rm -v "$HOME/.ssh:/x" alpine true` fails with `Mounts denied`; `docker run --rm -v "$PWD:/x" alpine true` succeeds | observed on: 2026-09-04 (personal; `$PWD` mount ok; `~/.ssh` mount still succeeds because File Sharing has not been narrowed in the Docker Desktop GUI, pending) |
 | SBOX-19 browser | inside: `hostrun open https://example.com` exits 0 and the page opens in the default browser | observed on: 2026-09-03 (personal; exit 0 and `auto` in the broker log seen by smoke, tab not visually confirmed) |
-| SBOX-30 approve / deny | inside: `hostrun /bin/echo hi` → dialog → Approve prints `hi`; again → Deny prints `hostrun: denied`, exit 126 | observed on: |
+| SBOX-30 approve / deny | inside: `hostrun /bin/echo hi` → dialog → Approve prints `hi`; again → Deny prints `hostrun: denied`, exit 126 | observed on: 2026-09-04 (personal; Approve printed `hi` rc 0, Deny printed `hostrun: denied` rc 126) |
 | SBOX-31 prompt | the dialog shows the workspace name (or workdir) and the exact command line; Deny is the focused button | observed on: |
-| SBOX-33 logged | `sandbox-report 1` on the host lists both requests with `approved` and `denied` | observed on: |
+| SBOX-33 logged | `sandbox-report 1` on the host lists both requests with `approved` and `denied` | observed on: 2026-09-04 (personal) |
 | SBOX-34 timeout | inside: `hostrun /bin/echo hi`, ignore the dialog for 30 s → `hostrun: timed out`, exit 124; the dialog closes | observed on: |
 | SBOX-35 concurrent / snapshot | two sessions run `hostrun /bin/echo <session>` at once; each prints its own; broker log shows two records | observed on: |
 | SBOX-36 storm | deny three requests in a row; the fourth prints `hostrun: storm guard active` without a dialog | observed on: |
