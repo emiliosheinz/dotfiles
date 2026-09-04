@@ -32,6 +32,10 @@
     ;; ~/.local/bin grant covers the symlink name only. Read-only, same
     ;; PATH-poisoning rationale as the ~/.local/bin and Homebrew grants.
     (home-subpath "/Library/Application Support/agentplan")
+    ;; ~/.spoke-env: Spoke work credentials (Linear API key and friends), read
+    ;; directly by agents; nothing in ~/dotfiles sources it. Read-only, and a
+    ;; deliberate exception to the secret denies in section 4.
+    (home-literal "/.spoke-env")
 )
 (allow file-read* file-write*
     (home-subpath "/.cache")                       ;; XDG cache: zsh compdump, tool caches
