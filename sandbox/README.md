@@ -199,6 +199,7 @@ after changes.
    package (`~/.local/bin/claude` becomes the dotfiles launcher).
    ```zsh
    [[ -L ~/.local/bin/claude && "$(readlink ~/.local/bin/claude)" != *dotfiles* ]] && rm ~/.local/bin/claude
+   find ~/dotfiles -name .DS_Store -not -path '*/.git/*' -delete   # Finder litter aborts stow
    cd ~/dotfiles && stow scripts opencode claude zsh
    ```
 3. **Broker**: renders the launchd job with your `$HOME`, seeds
@@ -237,10 +238,10 @@ the date and machine.
 
 | AC | Steps | observed on |
 |---|---|---|
-| SBOX-08 Docker socket | Docker Desktop running; inside: `docker ps` exits 0 | observed on: |
+| SBOX-08 Docker socket | Docker Desktop running; inside: `docker ps` exits 0 | observed on: 2026-09-04 (personal; `docker ps` and `docker pull alpine:3.20` exit 0 inside) |
 | SBOX-09 Ctrl-C / resize | in the Claude TUI: Ctrl-C interrupts a running tool, a second Ctrl-C prompts to exit; resize the pane and the UI reflows | observed on: |
-| SBOX-14 Docker mounts | inside: `docker run --rm -v "$HOME/.ssh:/x" alpine true` fails with `Mounts denied`; `docker run --rm -v "$PWD:/x" alpine true` succeeds | observed on: |
-| SBOX-19 browser | inside: `hostrun open https://example.com` exits 0 and the page opens in the default browser | observed on: |
+| SBOX-14 Docker mounts | inside: `docker run --rm -v "$HOME/.ssh:/x" alpine true` fails with `Mounts denied`; `docker run --rm -v "$PWD:/x" alpine true` succeeds | observed on: 2026-09-04 (personal; `$PWD` mount ok; `~/.ssh` mount still succeeds because File Sharing has not been narrowed in the Docker Desktop GUI, pending) |
+| SBOX-19 browser | inside: `hostrun open https://example.com` exits 0 and the page opens in the default browser | observed on: 2026-09-03 (personal; exit 0 and `auto` in the broker log seen by smoke, tab not visually confirmed) |
 | SBOX-30 approve / deny | inside: `hostrun /bin/echo hi` → dialog → Approve prints `hi`; again → Deny prints `hostrun: denied`, exit 126 | observed on: |
 | SBOX-31 prompt | the dialog shows the workspace name (or workdir) and the exact command line; Deny is the focused button | observed on: |
 | SBOX-33 logged | `sandbox-report 1` on the host lists both requests with `approved` and `denied` | observed on: |
@@ -249,5 +250,5 @@ the date and machine.
 | SBOX-36 storm | deny three requests in a row; the fourth prints `hostrun: storm guard active` without a dialog | observed on: |
 | SBOX-51 OAuth refresh | keep a session open past the token `expiresAt` (`security find-generic-password -s "Claude Code-credentials" -w \| jq .claudeAiOauth.expiresAt`) and send a prompt: no login prompt | observed on: |
 | SBOX-53 spoke | `zsh sandbox/smoke.zsh` passes on the spoke machine | observed on: |
-| SBOX-62 setup idempotency | run the host setup list twice; the second run changes nothing (`launchctl print gui/$UID/local.hostrun` still loaded, symlinks unchanged) | observed on: |
-| SBOX-63 CDP | `agent-chrome` on the host; inside: `curl -s http://127.0.0.1:9222/json/version` contains `webSocketDebuggerUrl` | observed on: |
+| SBOX-62 setup idempotency | run the host setup list twice; the second run changes nothing (`launchctl print gui/$UID/local.hostrun` still loaded, symlinks unchanged) | observed on: 2026-09-04 (personal; steps 1-3 twice, launcher symlink, plist and auto-approve checksums identical, job loaded) |
+| SBOX-63 CDP | `agent-chrome` on the host; inside: `curl -s http://127.0.0.1:9222/json/version` contains `webSocketDebuggerUrl` | observed on: 2026-09-03 (personal) |
