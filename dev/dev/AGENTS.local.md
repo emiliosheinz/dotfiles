@@ -10,7 +10,7 @@ policy._
 A **workspace** is one unit of parallel feature work. Its name is a single
 identifier that simultaneously names three things:
 
-- the terminal session the user launched you from (`WS_WORKSPACE`),
+- the workspace the user launched you in (exported as `WS_WORKSPACE`),
 - the folder `~/dev/.worktrees/<workspace>/`,
 - a git branch of the same name in every repo enlisted in the workspace.
 

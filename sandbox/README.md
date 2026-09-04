@@ -4,8 +4,8 @@ Claude Code and opencode run under a macOS Seatbelt policy applied by
 `sandbox-run` (the `claude` / `opencode` shell functions in
 `zsh/.aliases.zsh`). The base policy is generated at every launch by
 [agent-safehouse](https://github.com/eugene1g/agent-safehouse); this repo owns
-only the workspace scope, self-governance and telemetry rules in
-`ws-scope.sb`, plus the launcher, the `hostrun` broker and the denial log.
+the launcher, the rules appended after the generated ones (`ws-scope.sb`),
+the `hostrun` broker and the denial log.
 
 > `sandbox-exec` is deprecated since macOS 10.15 but still works on macOS 26.
 > There is no supported CLI replacement.
@@ -45,8 +45,8 @@ scope file is the per-launch dynamic block followed by `ws-scope.sb`:
    repo working tree read-only with its `.git` writable, `.worktrees` denied
    except the active workspace. `~/dev/.worktrees/<ws>/<repo>` launches: only
    that repo's source clone (read-only, `.git` writable) and the workdir;
-   sibling workspaces are invisible even though the generator snapshots
-   linked worktrees as readable. Other launch directories: the workdir only.
+   sibling workspaces are invisible. Other launch directories: the workdir
+   only.
 2. **Session grants** (dynamic): the session log, the session's broker queue,
    the shared inbox, the workspace tool directory.
 3. **Host grants** the generator lacks: dotfiles (read), `~/.local/{bin,scripts}`,
@@ -76,7 +76,7 @@ Unix sockets are deny-by-default (generator ≥ 0.11). Allowed:
 | Socket | Why |
 |---|---|
 | `/private/tmp/com.apple.launchd.*/Listeners` (ssh-agent) | `git push`, `ssh-add -l`; per-signature approval is opt-in (see host setup) |
-| `/var/run/docker.sock`, `~/.docker/run/docker.sock` | Docker CLI against Docker Desktop |
+| `/var/run/docker.sock`, `~/.docker/run/docker.sock` (plus colima, orbstack, podman paths) | Docker CLI |
 | `/private/var/run/mDNSResponder` | DNS |
 | Chrome `SingletonSocket` under `/var/folders` | Chrome launched inside |
 
@@ -106,9 +106,9 @@ removed on exit, and a supervisor caps the session log at 20 MB.
 `hostrun <command> [args...]` asks the host to run a non-interactive command
 in the session's workdir. The request goes into the session queue plus an
 empty marker in the inbox; the launchd job `local.hostrun` wakes on the
-inbox, reads the request once into memory (the snapshot), takes workspace
-and workdir from launcher-written host meta, derives the deadline from the
-request file's mtime + 30 s, and decides:
+inbox, reads the request once (later edits are ignored), takes workspace and
+workdir from host-side session metadata, sets the deadline at the request
+file's mtime + 30 s, and decides:
 
 1. **storm**: three consecutive denials or timeouts from one session block
    further requests for 10 minutes (`hostrun: storm guard active`, exit 126).
