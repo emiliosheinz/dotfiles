@@ -16,6 +16,7 @@ REPO="${SMOKE_REPO:-sbx-fixture}"
 WS="${SMOKE_WS:-sbx-a}"
 OTHER="${SMOKE_OTHER:-sbx-b}"
 LINK="${REPO}-link"
+NEW_WS="${WS}-smoke-new"
 launcher="${0:A:h}/../scripts/.local/scripts/sandbox-run"
 dotfiles="${HOME}/dotfiles"
 plist="${HOME}/Library/LaunchAgents/local.hostrun.plist"
@@ -56,6 +57,11 @@ cleanup() {
         "${HOME}/dev/${REPO}/.git/.probe" "${HOME}/dev/.worktrees/${WS}/${REPO}/.probe" \
         "${HOME}/dev/${LINK}"
     rmdir "${HOME}/dev/.worktrees/${WS}/${REPO}/.claude" 2>/dev/null
+    if [[ -d "${HOME}/dev/.worktrees/${NEW_WS}/${REPO}" ]]; then
+        git -C "${HOME}/dev/${REPO}" worktree remove --force "${HOME}/dev/.worktrees/${NEW_WS}/${REPO}" >/dev/null 2>&1
+        git -C "${HOME}/dev/${REPO}" branch -D "${NEW_WS}" >/dev/null 2>&1
+        rmdir "${HOME}/dev/.worktrees/${NEW_WS}" 2>/dev/null
+    fi
 }
 trap cleanup EXIT
 
@@ -63,7 +69,7 @@ cwd_path() {
     case "$1" in
         default) print "${HOME}/dev/.worktrees/${WS}/${REPO}" ;;
         dotfiles) print "${dotfiles}" ;;
-        dev) print "${HOME}/dev" ;;
+        dev|dev-new) print "${HOME}/dev" ;;
         repo) print "${HOME}/dev/${REPO}" ;;
         *) print -u2 "smoke: unknown cwd key $1"; exit 2 ;;
     esac
@@ -156,10 +162,12 @@ rows=(
 )
 # Broker rows: skipped until phase 3 installs hostrun and the launchd job.
 broker_rows=(
-    "SBOX-19|default|ok|hostrun open https://example.com"
+    "SBOX-19|default|ok|start=\$SECONDS; hostrun open https://example.com && (( SECONDS - start <= 5 ))"
     "SBOX-32|default|fail|touch ~/.local/state/agent-sandbox/host/auto-approve"
     "SBOX-34|default|ok|HOSTRUN_PLIST=/nonexistent hostrun true; [[ \$? == 127 ]]"
-    "SBOX-35|default|fail|ls ~/.local/state/agent-sandbox/sessions/"
+    "SBOX-35|default|fail|for d in ~/.local/state/agent-sandbox/sessions/*(N); do [[ \$d == */\$SANDBOX_SESSION_ID ]] && continue; cat \$d/log.jsonl >/dev/null 2>&1 && exit 0; done; exit 1"
+    "SBOX-44|default|fail|cat ~/.local/state/agent-sandbox/host/broker.jsonl"
+    "SBOX-07|dev-new|ok|ws wt add ${REPO} -b main && [[ -d ~/dev/.worktrees/${NEW_WS}/${REPO} ]]"
 )
 rows+=("${extra_rows[@]}")
 
@@ -174,7 +182,8 @@ run_row() {
         (cd "${dir}" && WS_WORKSPACE="${WS}" SANDBOX_RUN_PRINT_POLICY=1 "${launcher}" claude > "${tmp}/policy.sb")
         out=$(cd "${dir}" && SMOKE_POLICY="${tmp}/policy.sb" zsh -c "${cmd}" 2>&1); rc=$?
     else
-        out=$(cd "${dir}" && WS_WORKSPACE="${WS}" SANDBOX_RUN_AGENT_BIN="${stub}" "${launcher}" claude "${cmd}" 2>&1 </dev/null); rc=$?
+        local ws="${WS}"; [[ "${cwdkey}" == dev-new ]] && ws="${NEW_WS}"
+        out=$(cd "${dir}" && WS_WORKSPACE="${ws}" SANDBOX_RUN_AGENT_BIN="${stub}" "${launcher}" claude "${cmd}" 2>&1 </dev/null); rc=$?
     fi
     if (( rc == 0 )); then actual=ok; else actual=fail; fi
     if [[ "${actual}" == "${expect}" ]]; then
@@ -198,10 +207,19 @@ for row in "${rows[@]}"; do
     split_row "${row}"
     run_row "${row_ac}" "${row_cwd}" "${row_expect}" "${row_cmd}"
 done
+broker_log="${HOME}/.local/state/agent-sandbox/host/broker.jsonl"
 if [[ -r "${plist}" && -x "${hostrun}" ]]; then
     for row in "${broker_rows[@]}"; do
         split_row "${row}"
         run_row "${row_ac}" "${row_cwd}" "${row_expect}" "${row_cmd}"
+        # host-side assertion: auto-approved requests are logged as such
+        if [[ "${row_cmd}" == "start="* || "${row_cmd}" == "ws wt add"* ]] && [[ -z "${only}" || "${only}" == "${row_ac}" ]]; then
+            if [[ "$(tail -n 1 "${broker_log}" 2>/dev/null | jq -r .decision)" == auto ]]; then
+                print "ok   ${row_ac}  [host] broker log decision auto"
+            else
+                print "FAIL ${row_ac}  [host] broker log decision auto"; (( failed++ ))
+            fi
+        fi
     done
 else
     for row in "${broker_rows[@]}"; do
