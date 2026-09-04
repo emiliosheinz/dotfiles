@@ -27,6 +27,11 @@
     (home-subpath "/.config/nvim")
     (home-subpath "/.config/tmux")
     (home-literal "/.spaceshiprc.zsh")
+    ;; agentplan (Spoke workspace CLI): ~/.local/bin/agentplan symlinks into this
+    ;; package payload, so node needs to read and exec the resolved target. The
+    ;; ~/.local/bin grant covers the symlink name only. Read-only, same
+    ;; PATH-poisoning rationale as the ~/.local/bin and Homebrew grants.
+    (home-subpath "/Library/Application Support/agentplan")
 )
 (allow file-read* file-write*
     (home-subpath "/.cache")                       ;; XDG cache: zsh compdump, tool caches
