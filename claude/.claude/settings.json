@@ -32,7 +32,8 @@
   },
   "enabledPlugins": {
     "ponytail@ponytail": true,
-    "caveman@caveman": true
+    "caveman@caveman": true,
+    "typescript-lsp@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "ponytail": {
@@ -48,6 +49,7 @@
       }
     }
   },
+  "tui": "default",
   "skipDangerousModePermissionPrompt": true,
   "agentPushNotifEnabled": true
 }
