@@ -45,21 +45,30 @@ rm -f "${DIALOG_CALLS}"
 
 # --- SBOX-30: approve → direct exec, passthrough; deny → 126, not run ------
 answer approve
-submit "${S1}" "${tmp}/r1" /bin/sh -c 'printf out; printf err >&2; printf "%s" "$HOME"; exit 3'
+argv_r1=(/bin/sh -c 'printf out; printf err >&2; printf "%s" "$HOME"; exit 3')
+submit "${S1}" "${tmp}/r1" "${argv_r1[@]}"
 check "approve: rc passthrough" '[[ "$(cat "${tmp}/r1.rc")" == 3 ]]'
 check "approve: stdout and stderr passthrough" '[[ "$(cat "${tmp}/r1.out")" == "out${HOME}" && "$(cat "${tmp}/r1.err")" == err ]]'
+rec=$(broker_log | tail -1); expected_line="${(j: :)${(@q-)${(@)argv_r1}}}"
+check "broker record fields: ts ISO, src, session, ws, cmd, decision, rc" '[[ "$(print -r -- "$rec" | jq -r .src)" == broker && "$(print -r -- "$rec" | jq -r .session)" == "${S1}" && "$(print -r -- "$rec" | jq -r .ws)" == wsA && "$(print -r -- "$rec" | jq -r .cmd)" == "${expected_line}" && "$(print -r -- "$rec" | jq -r .decision)" == approved && "$(print -r -- "$rec" | jq -r .rc)" == 3 && "$(print -r -- "$rec" | jq -r .ts)" == <->-<->-<->T<->:<->:<->Z ]]'
 submit "${S1}" "${tmp}/r2" printf '%s' '$HOME'
 check "argv executed directly: no shell expansion of \$HOME" '[[ "$(cat "${tmp}/r2.out")" == "\$HOME" ]]'
 check "command runs in the session workdir with WS_WORKSPACE from meta" 'submit "${S1}" "${tmp}/r3" /bin/sh -c "pwd; printf %s \"\$WS_WORKSPACE\"" && [[ "$(cat "${tmp}/r3.out")" == "${tmp:A}/work"*wsA ]]'
-check "dialog received ws from meta and the quoted command line, control chars stripped" 'grep -q "^wsA|/bin/sh -c " "${DIALOG_CALLS}"'
+check "dialog received ws from meta and the exact quoted command line" 'grep -qF "wsA|${expected_line}|" "${DIALOG_CALLS}"'
 check "approved resets the storm counter" '[[ ! -e "${root}/host/storm/${S1}" ]]'
+ctl=$'\x01'
+submit "${S1}" "${tmp}/r3b" printf '%s' "ctl${ctl}char"
+check "control characters stripped from the dialog body" '! tail -1 "${DIALOG_CALLS}" | grep -q "${ctl}" && tail -1 "${DIALOG_CALLS}" | grep -q "ctlchar"'
 
 answer deny
 submit "${S1}" "${tmp}/r4" touch "${tmp}/ran-denied"
 check "deny: 126, message, command not run" '[[ "$(cat "${tmp}/r4.rc")" == 126 && "$(cat "${tmp}/r4.err")" == "hostrun: denied" && ! -e "${tmp}/ran-denied" ]]'
+check "deny logged with decision denied and rc 126" '[[ "$(broker_log | tail -1 | jq -r .decision)" == denied && "$(broker_log | tail -1 | jq -r .rc)" == 126 ]]'
 answer timeout
 submit "${S1}" "${tmp}/r5" touch "${tmp}/ran-timeout"
 check "dialog timeout: 124, message, command not run" '[[ "$(cat "${tmp}/r5.rc")" == 124 && "$(cat "${tmp}/r5.err")" == "hostrun: timed out" && ! -e "${tmp}/ran-timeout" ]]'
+check "timeout logged with decision timeout and rc 124" '[[ "$(broker_log | tail -1 | jq -r .decision)" == timeout && "$(broker_log | tail -1 | jq -r .rc)" == 124 ]]'
+check "default deadline is 30 s in hostrun and the broker" 'grep -q "HOSTRUN_DEADLINE:-30" "${hostrun}" && grep -q "HOSTRUN_DEADLINE:-30" "${broker}"'
 
 # --- SBOX-34: approval after the mtime-derived deadline does not run --------
 answer approve; print 5 > "${DIALOG_SLEEP}"
@@ -91,6 +100,10 @@ submit "${S3}" "${tmp}/s3" /bin/echo three
 n=$(calls)
 submit "${S3}" "${tmp}/s4" /bin/echo four
 check "three denials (auto in between does not reset): fourth is storm, no dialog" '[[ "$(cat "${tmp}/s4.rc")" == 126 && "$(cat "${tmp}/s4.err")" == "hostrun: storm guard active" && "$(calls)" == "$n" ]] && [[ "$(broker_log | tail -1 | jq -r .decision)" == storm ]]'
+print -r -- "3 $(( $(date +%s) - 700 ))" > "${root}/host/storm/${S3}"
+n=$(calls); answer approve
+submit "${S3}" "${tmp}/s5" /bin/echo five
+check "storm window expired (last non-approval > 10 min ago): prompts again" '[[ "$(calls)" == $((n+1)) && "$(cat "${tmp}/s5.out")" == five ]]'
 
 # --- SBOX-35: isolation and immutability -------------------------------------
 answer approve

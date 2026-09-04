@@ -17,6 +17,8 @@ WS="${SMOKE_WS:-sbx-a}"
 OTHER="${SMOKE_OTHER:-sbx-b}"
 LINK="${REPO}-link"
 NEW_WS="${WS}-smoke-new"
+DUMMY_SID="0-smoke"
+dummy_session="${HOME}/.local/state/agent-sandbox/sessions/${DUMMY_SID}"
 launcher="${0:A:h}/../scripts/.local/scripts/sandbox-run"
 dotfiles="${HOME}/dotfiles"
 plist="${HOME}/Library/LaunchAgents/local.hostrun.plist"
@@ -50,9 +52,12 @@ precondition "jq" command -v jq
 
 tmp=$(mktemp -d)
 stub="${tmp}/agent"
+# a foreign session other rows must not reach (SBOX-35/44)
+mkdir -p "${dummy_session}/requests" "${dummy_session}/results"
+print '{"src":"probe"}' > "${dummy_session}/log.jsonl"; print '{}' > "${dummy_session}/requests/probe.json"
 printf '#!/bin/zsh\nexec /bin/zsh -c "$*"\n' > "${stub}"; chmod +x "${stub}"
 cleanup() {
-    rm -rf "${tmp}"
+    rm -rf "${tmp}" "${dummy_session}"
     rm -f "${dotfiles}"/{sandbox,nvim/.config/nvim,scripts,zsh,claude,opencode,ai}/.probe \
         "${HOME}/dev/${REPO}/.git/.probe" "${HOME}/dev/.worktrees/${WS}/${REPO}/.probe" \
         "${HOME}/dev/${LINK}"
@@ -149,6 +154,15 @@ rows=(
     "SBOX-40|default|ok|head -c1 ~/.ssh/id_ed25519 2>/dev/null; for i in {1..20}; do grep -q '\"src\":\"kernel\".*\"path\":\"'\$HOME'/.ssh/id_ed25519\"' \"\$SANDBOX_SESSION_LOG\" && exit 0; sleep 0.5; done; exit 1"
     "SBOX-42|default|ok|sandbox-note 'docker ps' 'is the stack up' && grep -q '\"src\":\"note\".*\"want\":\"docker ps\"' \"\$SANDBOX_SESSION_LOG\""
     "SBOX-44|default|fail|touch ~/.local/scripts/sandbox-denial-hook"
+    "SBOX-44|default|fail|touch ~/.local/scripts/sandbox-note"
+    "SBOX-44|default|fail|touch ~/.local/scripts/sandbox-report"
+    "SBOX-44|default|fail|touch ~/.local/scripts/sandbox-run"
+    "SBOX-44|default|fail|cat ~/.local/state/agent-sandbox/sessions/${DUMMY_SID}/log.jsonl"
+    "SBOX-44|default|fail|echo x >> ~/.local/state/agent-sandbox/sessions/${DUMMY_SID}/log.jsonl"
+    "SBOX-35|default|fail|cat ~/.local/state/agent-sandbox/sessions/${DUMMY_SID}/requests/probe.json"
+    "SBOX-35|default|fail|touch ~/.local/state/agent-sandbox/sessions/${DUMMY_SID}/results/probe.json"
+    "SBOX-32|default|fail|touch ~/.local/scripts/hostrun-broker"
+    "SBOX-32|default|fail|touch ~/.local/scripts/hostrun"
     "SBOX-51|default|ok|head -c1 \"\$(brew --prefix)/bin/gh\""
     "SBOX-51|default|ok|head -c1 ~/.config/ccstatusline/settings.json"
     "SBOX-51|default|ok|head -c1 ~/.nvm/nvm.sh"
@@ -165,7 +179,6 @@ broker_rows=(
     "SBOX-19|default|ok|start=\$SECONDS; hostrun open https://example.com && (( SECONDS - start <= 5 ))"
     "SBOX-32|default|fail|touch ~/.local/state/agent-sandbox/host/auto-approve"
     "SBOX-34|default|ok|HOSTRUN_PLIST=/nonexistent hostrun true; [[ \$? == 127 ]]"
-    "SBOX-35|default|fail|for d in ~/.local/state/agent-sandbox/sessions/*(N); do [[ \$d == */\$SANDBOX_SESSION_ID ]] && continue; cat \$d/log.jsonl >/dev/null 2>&1 && exit 0; done; exit 1"
     "SBOX-44|default|fail|cat ~/.local/state/agent-sandbox/host/broker.jsonl"
     "SBOX-07|dev-new|ok|ws wt add ${REPO} -b main && [[ -d ~/dev/.worktrees/${NEW_WS}/${REPO} ]]"
 )

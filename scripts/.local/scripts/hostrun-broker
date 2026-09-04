@@ -156,6 +156,7 @@ process() {
     if ! regular "${meta}"; then log_record "${sid}" "" "" invalid 126; return; fi
     ws=$(jq -r '.ws // ""' "${meta}"); workdir=$(jq -r '.workdir // ""' "${meta}")
     if ! regular "${request}" || (( $(stat -f %z "${request}") > max_request_bytes )); then
+        rm -f "${request}"
         log_record "${sid}" "${ws}" "" invalid 126; deliver "${sid}" "${rid}" invalid 126 "" ""; return
     fi
     local deadline=$(( $(stat -f %m "${request}") + deadline_s ))
