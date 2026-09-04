@@ -117,25 +117,9 @@ git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 # Node
 echo "📦 Installing Node"
 wait_for_confirmation
-# Install nvm standalone 
-export NVM_DIR="$HOME/.nvm"
-if [ ! -d "$NVM_DIR" ]; then
-  mkdir -p "$NVM_DIR"
-  NVM_VERSION=$(curl -s https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
-  curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | bash
-fi
-
-# Load nvm
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-nvm install --lts 
-nvm use --lts 
-nvm alias default node 
-
-# pnpm
-echo "📦 Installing pnpm"
-wait_for_confirmation
-brew install pnpm
+curl https://get.volta.sh | bash
+volta install node
+volta install corepack
 
 # Rosetta (required for Docker on Apple Silicon)
 if [[ $(uname -m) == "arm64" ]]; then
