@@ -51,7 +51,7 @@ stub="${tmp}/agent"
 printf '#!/bin/zsh\nexec /bin/zsh -c "$*"\n' > "${stub}"; chmod +x "${stub}"
 cleanup() {
     rm -rf "${tmp}"
-    rm -f "${dotfiles}/sandbox/.probe" "${dotfiles}/nvim/.config/nvim/.probe" \
+    rm -f "${dotfiles}"/{sandbox,nvim/.config/nvim,scripts,zsh,claude,opencode,ai}/.probe \
         "${HOME}/dev/${REPO}/.git/.probe" "${HOME}/dev/.worktrees/${WS}/${REPO}/.probe" \
         "${HOME}/dev/${LINK}"
     rmdir "${HOME}/dev/.worktrees/${WS}/${REPO}/.claude" 2>/dev/null
@@ -72,18 +72,32 @@ cwd_path() {
 rows=(
     "SBOX-02|dotfiles|ok|touch ~/dotfiles/sandbox/.probe"
     "SBOX-02|dotfiles|ok|touch ~/dotfiles/nvim/.config/nvim/.probe"
+    "SBOX-02|dotfiles|ok|touch ~/dotfiles/scripts/.probe"
+    "SBOX-02|dotfiles|ok|touch ~/dotfiles/zsh/.probe"
+    "SBOX-02|dotfiles|ok|touch ~/dotfiles/claude/.probe"
+    "SBOX-02|dotfiles|ok|touch ~/dotfiles/opencode/.probe"
+    "SBOX-02|dotfiles|ok|touch ~/dotfiles/ai/.probe"
+    "SBOX-02|dotfiles|fail|touch ~/dotfiles/scripts/.local/bin/claude"
     "SBOX-02|default|fail|touch ~/dotfiles/sandbox/.probe"
     "SBOX-02|default|fail|touch ~/dotfiles/scripts/.probe"
     "SBOX-02|default|fail|touch ~/.claude/settings.json"
     "SBOX-02|default|fail|touch ~/.claude/CLAUDE.md"
-    "SBOX-02|default|fail|touch ~/.claude/hooks/.probe"
+    "SBOX-02|default|fail|mkdir -p ~/.claude/hooks && touch ~/.claude/hooks/.probe"
+    "SBOX-02|default|fail|mkdir -p ~/.claude/agents && touch ~/.claude/agents/.probe"
+    "SBOX-02|default|fail|mkdir -p ~/.claude/skills && touch ~/.claude/skills/.probe"
+    "SBOX-02|default|fail|mkdir -p ~/.claude/plugins && touch ~/.claude/plugins/.probe"
+    "SBOX-02|default|fail|mkdir -p ~/.claude/commands && touch ~/.claude/commands/.probe"
     "SBOX-02|default|fail|touch ~/.mcp.json"
     "SBOX-02|default|fail|touch ~/.config/opencode/opencode.json"
     "SBOX-02|default|fail|touch ~/.config/opencode/plugins/.probe"
+    "SBOX-02|default|fail|touch ~/.config/opencode/AGENTS.md"
     "SBOX-02|default|fail|mkdir -p .claude && touch .claude/settings.json"
     "SBOX-02|default|fail|mkdir -p .claude && touch .claude/settings.local.json"
     "SBOX-02|default|fail|ln -sf /tmp/x ~/.zshrc"
+    "SBOX-02|default|fail|touch ~/.zshrc"
     "SBOX-02|default|fail|touch ~/.zshenv"
+    "SBOX-02|default|fail|touch ~/.zprofile"
+    "SBOX-02|default|fail|touch ~/.zlogin"
     "SBOX-02|default|fail|touch ~/.aliases.zsh"
     "SBOX-02|default|fail|touch ~/.gitconfig"
     "SBOX-02|default|fail|touch ~/.config/git/.probe"
@@ -111,12 +125,12 @@ rows=(
     "SBOX-10|default|ok|pgrep -l zsh"
     "SBOX-10|default|ok|ps -o pid,comm -p \$\$"
     "SBOX-10|default|ok|kill -0 \$(pgrep -n -x tmux)"
-    "SBOX-11|default|ok|brew --prefix"
-    "SBOX-11|default|ok|brew list --formula"
+    "SBOX-11|default|ok|out=\$(brew --prefix 2>&1) && ! print -r -- \"\$out\" | grep -Eq '${denial_pattern}'"
+    "SBOX-11|default|ok|out=\$(brew list --formula 2>&1) && ! print -r -- \"\$out\" | grep -Eq '${denial_pattern}'"
     "SBOX-11|default|ok|out=\$(brew info jq 2>&1) && ! print -r -- \"\$out\" | grep -Eq '${denial_pattern}'"
     "SBOX-11|default|fail|touch \"\$(brew --prefix)/.probe\""
-    "SBOX-12|default|ok|! zsh -ic true 2>&1 | grep -Eq '${denial_pattern}'"
-    "SBOX-13|default|ok|'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --no-sandbox --dump-dom about:blank 2>/dev/null | grep -q '<html'"
+    "SBOX-12|default|ok|err=\$(zsh -ic true 2>&1 >/dev/null) && ! print -r -- \"\$err\" | grep -Eq '${denial_pattern}'"
+    "SBOX-13|default|ok|out=\$('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --no-sandbox --dump-dom about:blank 2>/dev/null) && [[ \$out == *'<html'* ]]"
     "SBOX-15|default|ok|gh api user"
     "SBOX-15|default|ok|git ls-remote git@github.com:emiliosheinz/dotfiles.git HEAD"
     "SBOX-15|default|fail|touch ~/.config/gh/hosts.yml"
@@ -133,6 +147,8 @@ rows=(
     # Rendered-policy assertions (SBOX-05 second AC, SBOX-50)
     "SBOX-05|default|ok|for p in 'home-prefix \"/.ssh/id_\"' 'home-subpath \"/.gnupg\"' 'home-subpath \"/.aws\"' 'home-subpath \"/.config/gcloud\"' 'Support/Google/Chrome\"' 'Support/Firefox\"' 'Support/Safari\"'; do grep -qF -- \"\$p\" \$SMOKE_POLICY || exit 1; done"
     "SBOX-50|default|ok|grep -q ';; Source: 00-base.sb' \$SMOKE_POLICY && grep -q ';; ws-scope.sb' \$SMOKE_POLICY"
+    "SBOX-50|default|ok|[[ ! -e ~/dotfiles/sandbox/agents.sb ]]"
+    "SBOX-53|dotfiles|ok|! git grep -q '/User[s]/' -- sandbox scripts"
 )
 # Broker rows: skipped until phase 3 installs hostrun and the launchd job.
 broker_rows=(

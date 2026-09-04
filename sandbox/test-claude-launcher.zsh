@@ -20,4 +20,20 @@ check "falls back to the previous version once removed" '[[ "$out" == "stub-2.0.
 rm "${versions}/2.0.0"
 CLAUDE_VERSIONS_DIR="${versions}" zsh "${launcher}" 2>/dev/null; rc=$?
 check "no versions installed exits non-zero" '(( rc != 0 ))'
+
+# SBOX-16 first AC through the real chain: shell function -> sandbox-run ->
+# ~/.local/bin/claude -> highest version. Needs the host launcher installed.
+real_versions="${HOME}/.local/share/claude/versions"
+if [[ -d "${real_versions}" && "$(readlink "${HOME}/.local/bin/claude")" == *dotfiles/scripts/.local/bin/claude ]]; then
+    stub="${real_versions}/99.0.0"
+    trap 'rm -f "${stub}"; rm -rf "${tmp}"' EXIT
+    printf '#!/bin/sh\necho stub-version\n' > "${stub}"; chmod +x "${stub}"
+    out=$(cd "${HOME}/dotfiles" && zsh -c 'source ~/.aliases.zsh; claude --version' 2>/dev/null </dev/null)
+    check "shell function runs the 99.0.0 stub through the sandbox" '[[ "$out" == stub-version ]]'
+    rm -f "${stub}"
+    out=$(cd "${HOME}/dotfiles" && zsh -c 'source ~/.aliases.zsh; claude --version' 2>/dev/null </dev/null)
+    check "after removal the previously installed version runs" '[[ "$out" == *"(Claude Code)"* ]]'
+else
+    print "SKIP host launcher not installed (~/.local/bin/claude is not the dotfiles script)"
+fi
 exit $fail

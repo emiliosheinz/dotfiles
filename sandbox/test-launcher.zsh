@@ -70,6 +70,16 @@ check "session log created" '[[ -f "${SANDBOX_STATE_ROOT}/sessions/${sid}/log.js
 meta="${SANDBOX_STATE_ROOT}/host/meta/${sid}.json"
 check "host meta written with workdir" '[[ "$(jq -r .workdir "$meta")" == "${work:A}" ]]'
 check "SANDBOX_RUN_AGENT_BIN override honoured" '(cd "${work}" && SANDBOX_RUN_AGENT_BIN="${stubs}/claude" "${launcher}" claude) && [[ -s "$envf" ]]'
+
+# opencode absent from PATH: fall back to <brew prefix>/bin/opencode (SBOX-53)
+mkdir -p "${tmp}/bin"
+printf '#!/bin/zsh\nprint -r -- "$0" > "${PWD}/env.txt"\n' > "${tmp}/bin/opencode"; chmod +x "${tmp}/bin/opencode"
+printf '#!/bin/sh\nexit 0\n' > "${stubs}/brew"; chmod +x "${stubs}/brew"
+ln -sf "${real_jq}" "${stubs}/jq"; ln -sf "${real_safehouse}" "${stubs}/safehouse"
+rm -f "${envf}"
+(cd "${work}" && PATH="${stubs}:/usr/bin:/bin" "${launcher}" opencode 2>/dev/null); rc=$?
+check "opencode falls back to the brew prefix" '(( rc == 0 )) && [[ "$(cat "$envf")" == "${tmp}/bin/opencode" ]]'
+rm -f "${stubs}/brew" "${stubs}/jq" "${stubs}/safehouse"
 # --- SBOX-09: exit status, signals, supervisor lifetime ---------------------
 cat > "${stubs}/claude" <<'STUB'
 #!/bin/zsh
