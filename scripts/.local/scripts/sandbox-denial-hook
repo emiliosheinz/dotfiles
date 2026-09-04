@@ -1,0 +1,21 @@
+#!/usr/bin/env zsh
+# sandbox-denial-hook: Claude Code PostToolUse / PostToolUseFailure hook
+# (matcher Bash). Reads the hook JSON on stdin; when the tool's stderr,
+# stdout or error matches the denial pattern, appends a `hook` record to the
+# session's denial log (SBOX-41). Always exits 0; a no-op outside a sandbox
+# session, without jq, on malformed input, or once the log reaches its cap.
+[[ -n "${SANDBOX_SESSION_LOG:-}" ]] || exit 0
+command -v jq >/dev/null 2>&1 || exit 0
+size=$(stat -f %z "${SANDBOX_SESSION_LOG}" 2>/dev/null || print 0)
+(( size >= 20 * 1024 * 1024 )) && exit 0
+
+jq -c --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg sid "${SANDBOX_SESSION_ID:-}" \
+    --arg ws "${WS_WORKSPACE:-$PWD}" '
+    def field(f): (f // "") | if type == "string" then . else tojson end;
+    ([ (.tool_response | if type == "object" then field(.stderr), field(.stdout) else field(.) end),
+       field(.error) ] | map(select(length > 0)) | join("\n")) as $text
+    | select($text | test("Operation not permitted|EPERM|Sandbox: .* deny\\(|Mounts denied"))
+    | {ts: $ts, src: "hook", session: $sid, ws: $ws,
+       cmd: field(.tool_input.command), snippet: $text[0:400]}
+' >> "${SANDBOX_SESSION_LOG}" 2>/dev/null
+exit 0
