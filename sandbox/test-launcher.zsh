@@ -153,6 +153,7 @@ sid=$(ls -t "${SANDBOX_STATE_ROOT}/host/meta" | head -1 | sed 's/\.json$//')
 rec=$(grep '"src":"kernel"' "${SANDBOX_STATE_ROOT}/sessions/${sid}/log.jsonl" | head -1)
 check "fake denial line parsed into a kernel record" '[[ -n "$rec" ]] && [[ "$(print -r -- "$rec" | jq -r ".op")" == file-read-data && "$(print -r -- "$rec" | jq -r ".path")" == /private/var/fixture/.ssh/id_ed25519 && "$(print -r -- "$rec" | jq -r ".pid")" == 82503 && "$(print -r -- "$rec" | jq -r ".proc")" == cat ]]'
 check "kernel record tagged with session and ISO timestamp" '[[ "$(print -r -- "$rec" | jq -r ".session")" == "$sid" && "$(print -r -- "$rec" | jq -r ".ts")" == 2026-09-03T22:02:39-03:00 ]]'
+check "kernel record ws = workdir outside ~/dev" '[[ "$(print -r -- "$rec" | jq -r ".ws")" == "${work:A}" ]]'
 check "sidecar stopped after the agent exited" '! pgrep -f "${stubs}/log-fake" >/dev/null'
 
 cat > "${stubs}/claude" <<'STUB'
@@ -170,4 +171,33 @@ wait "${lpid}"
 check "killed sidecar recorded as sidecar-died host event" 'grep -q "\"event\":\"sidecar-died\"" "${SANDBOX_STATE_ROOT}/host/events.jsonl"'
 check "sidecar restarted exactly once" '(( $(wc -l < "${STUB_LOG_PIDS}") == 2 ))'
 check "no sidecar left after the launch" '! pgrep -f "${stubs}/log-fake" >/dev/null'
+
+# SBOX-09: no capture process 5 s after SIGKILL of the agent or the launcher
+cat > "${stubs}/claude" <<'STUB'
+#!/bin/zsh
+echo $$ > "${PWD}/agent.pid"
+while :; do sleep 1; done
+STUB
+for victim in agent launcher; do
+    rm -f "${work}/agent.pid" "${STUB_LOG_PIDS}"
+    (cd "${work}" && PATH="${stubs}:${PATH}" SANDBOX_RUN_LOG_BIN="${stubs}/log-fake" "${launcher}" claude 2>/dev/null) &
+    lpid=$!
+    wait_for '[[ -s "${work}/agent.pid" && -s "${STUB_LOG_PIDS}" ]]'
+    if [[ "${victim}" == agent ]]; then kill -KILL "$(cat "${work}/agent.pid")"; else kill -KILL "${lpid}"; fi
+    wait "${lpid}" 2>/dev/null
+    check "SIGKILL ${victim}: capture process gone within 5 s" 'wait_for "! pgrep -f ${stubs}/log-fake >/dev/null"'
+    kill -KILL "$(cat "${work}/agent.pid")" 2>/dev/null
+done
+
+# SBOX-45: host-side truncation of an oversized session log
+cat > "${stubs}/claude" <<'STUB'
+#!/bin/zsh
+head -c 22000000 /dev/zero | tr '\0' a >> "${SANDBOX_SESSION_LOG}"
+sleep 4
+exit 0
+STUB
+(cd "${work}" && PATH="${stubs}:${PATH}" SANDBOX_RUN_LOG_BIN="${stubs}/log-fails" "${launcher}" claude 2>/dev/null)
+sid=$(ls -t "${SANDBOX_STATE_ROOT}/host/meta" | head -1 | sed 's/\.json$//')
+check "session log truncated to 20 MB by the supervisor" '(( $(stat -f %z "${SANDBOX_STATE_ROOT}/sessions/${sid}/log.jsonl") <= 20 * 1024 * 1024 ))'
+check "log-truncated host event recorded for the session" 'grep -q "\"event\":\"log-truncated\",\"session\":\"${sid}\"" "${SANDBOX_STATE_ROOT}/host/events.jsonl"'
 exit $fail

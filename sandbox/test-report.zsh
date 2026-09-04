@@ -26,6 +26,7 @@ kernel() { print -r -- "{\"ts\":\"$1\",\"src\":\"kernel\",\"session\":\"$2\",\"w
     print -r -- '{"ts":"'"${now}"'","src":"hook","session":"s1","ws":"w","cmd":"tmux ls","snippet":"x"}'
     print -r -- '{"ts":"'"${now}"'","src":"hook","session":"s1","ws":"w","cmd":"tmux ls","snippet":"x"}'
     print -r -- '{"ts":"'"${now}"'","src":"hook","session":"s1","ws":"w","cmd":"cat \u001b[31mred\u001b[0m","snippet":"x"}'
+    for i in {1..11}; do print -r -- '{"ts":"'"${now}"'","src":"hook","session":"s1","ws":"w","cmd":"cmd'"$(printf %02d $i)"'","snippet":"x"}'; done
     print -r -- '{"ts":"'"${now}"'","src":"note","session":"s1","ws":"w","want":"docker ps","why":"stack up?"}'
     print -r -- 'this line is not json'
     print -r -- '{"ts":"'"${old}"'","src":"note","session":"s1","ws":"w","want":"ancient","why":""}'
@@ -42,6 +43,9 @@ check "kernel duplicates counted once (same line, other session)" '[[ "$(print -
 check "kernel section capped at 10 rows" '(( $(print -r -- "$out" | sed -n "/## Kernel/,/## Agent/p" | grep -c "^ *[0-9]") == 10 ))'
 check "count desc then path asc: /a before /b, both before /p*" '[[ "$(print -r -- "$out" | grep -E "^ +1 +file-read" | head -2 | awk "{print \$3}" | tr "\n" " ")" == "/a /b " ]]'
 check "hook commands grouped by count" '[[ "$(print -r -- "$out" | grep -E "^ +2 +tmux ls$" | wc -l | tr -d " ")" == 1 ]]'
+hook_lines=("${(@f)$(print -r -- "$out" | sed -n "/## Agent-visible/,/## Notes/p" | grep "^ *[0-9]")}")
+check "hook section capped at 10 rows, count desc then cmd asc" '(( ${#hook_lines} == 10 )) && [[ "${hook_lines[1]}" == *"tmux ls" && "${hook_lines[2]}" == *"cat "* && "${hook_lines[3]}" == *cmd01 && "${hook_lines[10]}" == *cmd08 ]]'
+check "note and broker lines start with the record ts" '[[ "$(print -r -- "$out" | grep "want: docker ps")" == "  ${now}  "* && "$(print -r -- "$out" | grep "open https://x")" == "  ${now}  "* ]]'
 check "ANSI escapes stripped" '[[ "$out" != *"${esc}"* && "$out" == *"cat [31mred[0m"* ]]'
 check "note printed, old note outside window omitted" '[[ "$out" == *"want: docker ps  why: stack up?"* && "$out" != *ancient* ]]'
 check "broker record printed with decision and rc" '[[ "$out" == *"auto"*"rc=0"*"open https://x"* ]]'

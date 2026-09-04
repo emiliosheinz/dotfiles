@@ -1,6 +1,6 @@
 // SBOX-41 second AC: the opencode plugin appends a hook record for a bash
 // tool call whose output matches the denial pattern, and nothing otherwise.
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,6 +35,11 @@ await hooks["tool.execute.after"](fixture.input, { ...fixture.output, output: "a
 check("clean output appends nothing", () => assert.equal(records().length, 1));
 await hooks["tool.execute.after"]({ ...fixture.input, tool: "read" }, fixture.output);
 check("non-bash tools are ignored", () => assert.equal(records().length, 1));
+const big = join(dir, "big.jsonl");
+writeFileSync(big, Buffer.alloc(20 * 1024 * 1024));
+process.env.SANDBOX_SESSION_LOG = big;
+await hooks["tool.execute.after"](fixture.input, fixture.output);
+check("log at 20 MB: append skipped", () => assert.equal(statSync(big).size, 20 * 1024 * 1024));
 delete process.env.SANDBOX_SESSION_LOG;
 await hooks["tool.execute.after"](fixture.input, fixture.output);
 check("no SANDBOX_SESSION_LOG: no-op", () => assert.equal(records().length, 1));

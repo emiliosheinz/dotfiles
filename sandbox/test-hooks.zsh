@@ -43,6 +43,6 @@ zsh "${note}" "docker ps" "check whether the dev stack is up"; rc=$?
 check "sandbox-note two args: exit 0, note record" '(( rc == 0 )) && [[ "$(last | jq -r .src)" == note && "$(last | jq -r .want)" == "docker ps" && "$(last | jq -r .why)" == "check whether the dev stack is up" ]]'
 zsh "${note}" "open a URL"; rc=$?
 check "sandbox-note one arg: why empty" '(( rc == 0 )) && [[ "$(last | jq -r .why)" == "" && "$(last | jq -r .want)" == "open a URL" ]]'
-zsh "${note}" 2>/dev/null; rc=$?
-check "sandbox-note without args: usage error" '(( rc != 0 ))'
+SANDBOX_SESSION_LOG="${big}" zsh "${note}" "x" "y"; rc=$?
+check "sandbox-note at 20 MB: exit 0, append skipped" '(( rc == 0 && $(stat -f %z "${big}") == 20 * 1024 * 1024 ))'
 exit $fail
