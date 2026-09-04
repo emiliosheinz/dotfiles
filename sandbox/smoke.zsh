@@ -42,6 +42,7 @@ precondition "~/.ssh/id_ed25519" test -f "${HOME}/.ssh/id_ed25519"
 precondition "Google Chrome" test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 precondition "gh auth status" gh auth status
 precondition "ssh-agent with a loaded key" ssh-add -l
+precondition "tmux server socket" test -S "/private/tmp/tmux-$(id -u)/default"
 precondition "safehouse" command -v safehouse
 precondition "jq" command -v jq
 [[ -e "${HOME}/dev/${LINK}" ]] || ln -s "${REPO}" "${HOME}/dev/${LINK}"
@@ -116,6 +117,7 @@ rows=(
     "SBOX-05|default|fail|head -c1 '${HOME}/Library/Application Support/Google/Chrome/Default/Cookies'"
     "SBOX-06|default|fail|tmux ls"
     "SBOX-06|default|fail|tmux new-window true"
+    "SBOX-06|default|fail|ls /private/tmp/tmux-\$(id -u)/"
     "SBOX-06|default|ok|[[ \$(ws workspace) == ${WS} ]]"
     "SBOX-07|default|fail|touch ~/dev/${REPO}/.git/hooks/.probe"
     "SBOX-07|default|fail|touch ~/dev/${REPO}/.git/config"
