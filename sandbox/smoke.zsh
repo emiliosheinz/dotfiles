@@ -143,6 +143,8 @@ rows=(
     "brew|default|ok|out=\$(brew info jq 2>&1) && ! print -r -- \"\$out\" | grep -Eq '${denial_pattern}'"
     "brew|default|fail|touch \"\$(brew --prefix)/.probe\""
     "zsh-startup|default|ok|err=\$(zsh -ic true 2>&1 >/dev/null) && ! print -r -- \"\$err\" | grep -Eq '${denial_pattern}'"
+    "playwright|default|ok|touch ~/Library/Caches/ms-playwright-mcp/.probe && rm ~/Library/Caches/ms-playwright-mcp/.probe"
+    "playwright|default|ok|d=\$(getconf DARWIN_USER_TEMP_DIR)pw-smoke; mkdir -p \$d && python3 -c 'import socket,sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' \$d/b.sock; rc=\$?; rm -rf \$d; exit \$rc"
     "chrome|default|ok|out=\$('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless --disable-gpu --no-sandbox --dump-dom about:blank 2>/dev/null) && [[ \$out == *'<html'* ]]"
     "gh|default|ok|gh api user"
     "gh|default|ok|git ls-remote git@github.com:emiliosheinz/dotfiles.git HEAD"

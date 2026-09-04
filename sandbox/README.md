@@ -52,7 +52,8 @@ scope file is the per-launch dynamic block followed by `ws-scope.sb`:
 3. **Host grants** the generator lacks: dotfiles (read), `~/.local/{bin,scripts}`,
    `~/.cache` (write), oh-my-zsh, zinit, `~/.config/{ccstatusline,worktrunk,nvim,tmux}`,
    the broker job definition, the Docker credential helper's log directory
-   (write; image pulls fail without it), `system-sched`, and `/bin/ps` executed
+   (write; image pulls fail without it), the Playwright MCP profile
+   (`~/Library/Caches/ms-playwright-mcp`), `system-sched`, and `/bin/ps` executed
    `(with no-sandbox)` because Seatbelt forbids setuid exec inside a sandbox.
 4. **Self-governance denies**: Claude and opencode settings, instructions,
    agents, skills, plugins, hooks; `~/.mcp.json`; shell startup files,
@@ -79,6 +80,7 @@ Unix sockets are deny-by-default (generator ≥ 0.11). Allowed:
 | `/var/run/docker.sock`, `~/.docker/run/docker.sock` (plus colima, orbstack, podman paths) | Docker CLI |
 | `/private/var/run/mDNSResponder` | DNS |
 | Chrome `SingletonSocket` under `/var/folders` | Chrome launched inside |
+| `$TMPDIR/pw-*/` (bind and connect) | Playwright driving the browser it launched |
 
 The tmux control socket (`/private/tmp/tmux-<uid>/`) is denied; tmux verbs
 go through `hostrun`.
@@ -207,10 +209,14 @@ after changes.
 3. **Optional per-signature ssh approval**: `brew install theseal/ssh-askpass/ssh-askpass`,
    then `ssh-add -c ~/.ssh/id_ed25519` (re-add after each login; the agent
    prompts on every signature).
-4. **Headed Chrome for automation**: `agent-chrome` (alias) starts Chrome with
-   `--remote-debugging-port=9222 --user-data-dir=~/.local/state/agent-chrome`
-   on the host; inside, `curl -s http://127.0.0.1:9222/json/version` returns
-   the `webSocketDebuggerUrl` for Playwright's `connectOverCDP`.
+4. **Browsers for agents**. Chrome only starts inside with `--no-sandbox`
+   (Seatbelt forbids a nested sandbox), so the Playwright MCP must be
+   registered with that flag; `opencode.json` already does, for Claude run
+   `claude mcp add -s user playwright -- npx @playwright/mcp@latest --no-sandbox`.
+   For a headed browser on the host, `agent-chrome` (alias) starts Chrome
+   with `--remote-debugging-port=9222 --user-data-dir=~/.local/state/agent-chrome`;
+   inside, `curl -s http://127.0.0.1:9222/json/version` returns the
+   `webSocketDebuggerUrl` for Playwright's `connectOverCDP`.
 5. **Smoke fixture** (once):
    ```zsh
    git init ~/dev/sbx-fixture && (cd ~/dev/sbx-fixture && echo fixture > README.md && git add . && git commit -qm init)

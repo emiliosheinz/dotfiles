@@ -20,7 +20,8 @@
       "type": "local",
       "command": [
         "npx",
-        "@playwright/mcp@latest"
+        "@playwright/mcp@latest",
+        "--no-sandbox"
       ],
       "enabled": false
     },

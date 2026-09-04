@@ -38,7 +38,7 @@
 
 ## Sandbox (Claude Code and opencode sessions)
 
-- You run under a macOS sandbox scoped to the launch directory and the active workspace. `ps`, `pgrep`, `kill`, Homebrew reads, `gh`, `git push`, headless Chrome (`--no-sandbox`) and the Docker CLI work directly.
+- You run under a macOS sandbox scoped to the launch directory and the active workspace. `ps`, `pgrep`, `kill`, Homebrew reads, `gh`, `git push`, the Playwright MCP, Chrome (`--no-sandbox`) and the Docker CLI work directly.
 - Host-only actions go through `hostrun <command>`: `open <url>`, `brew install`, `hostrun open -a Docker` to start Docker Desktop. `ws` verbs route themselves. `open https://…` and `ws wt add` run without approval; everything else prompts the user and times out after 30 s.
 - `hostrun` is non-interactive: `gh auth login` and other TTY prompts are for the user to run; ask them.
 - Never pass secrets on a `hostrun` command line; it is logged.
