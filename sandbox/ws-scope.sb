@@ -31,7 +31,13 @@
 (allow file-read* file-write*
     (home-subpath "/.cache")                       ;; XDG cache: zsh compdump, tool caches (SBOX-12)
     (home-subpath "/.oh-my-zsh/cache")             ;; completion cache written on every interactive start
+    (home-subpath "/Library/Containers/com.docker.docker/Data/log")  ;; docker-credential-desktop log; every image pull fails without it (SBOX-14)
 )
+;; docker-credential-desktop stats each ancestor of its log dir before creating it
+(allow file-read-metadata
+    (home-literal "/Library/Containers")
+    (home-literal "/Library/Containers/com.docker.docker")
+    (home-literal "/Library/Containers/com.docker.docker/Data"))
 (allow system-sched)                               ;; setpriority on self; zsh `nice` in prompt sections (SBOX-12)
 ;; /bin/ps is setuid and Seatbelt forbids sugid exec inside a sandbox; ps only
 ;; reads process state, so it runs unsandboxed (SBOX-10). pgrep/kill are

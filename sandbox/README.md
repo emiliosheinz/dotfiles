@@ -51,7 +51,8 @@ scope file is the per-launch dynamic block followed by `ws-scope.sb`:
    the shared inbox, the workspace tool directory.
 3. **Host grants** the generator lacks: dotfiles (read), `~/.local/{bin,scripts}`,
    `~/.cache` (write), oh-my-zsh, zinit, `~/.config/{ccstatusline,worktrunk,nvim,tmux}`,
-   the broker job definition, `system-sched`, and `/bin/ps` executed
+   the broker job definition, the Docker credential helper's log directory
+   (write; image pulls fail without it), `system-sched`, and `/bin/ps` executed
    `(with no-sandbox)` because Seatbelt forbids setuid exec inside a sandbox.
 4. **Self-governance denies**: Claude and opencode settings, instructions,
    agents, skills, plugins, hooks; `~/.mcp.json`; shell startup files,
