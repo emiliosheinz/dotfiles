@@ -35,6 +35,8 @@ readonly WT_ROOT="${DEV_DIR}/.worktrees"
 readonly WS_BIN="${HOME_DIR}/.local/scripts/ws"
 readonly SCOPE_SRC="${HOME_DIR}/dotfiles/sandbox/ws-scope.sb"
 readonly STATE_ROOT="${SANDBOX_STATE_ROOT:-${HOME_DIR}/.local/state/agent-sandbox}"
+readonly LOG_CAP_BYTES=$(( 20 * 1024 * 1024 ))
+readonly LAUNCHER_PID=$$
 
 die() { print -u2 "sandbox-run: $*"; exit 1 }
 
@@ -198,9 +200,14 @@ emit_session_grants() {
 write_meta() {
     local tmp="${STATE_ROOT}/host/meta/.${SESSION_ID}.tmp"
     jq -n --arg sid "${SESSION_ID}" --arg ws "${ACTIVE_BRANCH}" --arg workdir "${WORKDIR}" \
-        --arg started "${STARTED}" --argjson pid "${1:-0}" \
-        '{sid:$sid, ws:$ws, workdir:$workdir, started:$started, agent_pid:$pid}' > "${tmp}"
+        --arg started "${STARTED}" --argjson pid "${1:-0}" --argjson sup "${2:-0}" \
+        '{sid:$sid, ws:$ws, workdir:$workdir, started:$started, agent_pid:$pid, supervisor_pid:$sup}' > "${tmp}"
     mv -f "${tmp}" "${STATE_ROOT}/host/meta/${SESSION_ID}.json"
+}
+
+host_event() {
+    jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg event "$1" --arg sid "${SESSION_ID}" \
+        '{ts:$ts, event:$event, session:$sid}' >> "${STATE_ROOT}/host/events.jsonl"
 }
 
 umask 077
@@ -276,4 +283,42 @@ if (( ${COLUMNS:-0} == 0 )); then
 fi
 export COLUMNS
 
-exec sandbox-exec -f "${POLICY_FILE}" "${AGENT_BIN}" "$@"
+# --- process model (SBOX-09) --------------------------------------------------
+# The agent is a child so terminal signals can be forwarded, its exit status
+# propagated, and the session queue removed afterwards. The supervisor is a
+# separate process that outlives a SIGKILLed launcher: it enforces the
+# session-log cap host-side and stops once the agent or the launcher is gone.
+supervise() {
+    trap '' INT HUP TERM
+    local size
+    while kill -0 "${AGENT_PID}" 2>/dev/null && kill -0 "${LAUNCHER_PID}" 2>/dev/null; do
+        sleep 1
+        size=$(stat -f %z "${SESSION_LOG}" 2>/dev/null || print 0)
+        if (( size > LOG_CAP_BYTES )); then
+            tail -c "${LOG_CAP_BYTES}" "${SESSION_LOG}" > "${SESSION_LOG}.tmp" && mv -f "${SESSION_LOG}.tmp" "${SESSION_LOG}"
+            host_event log-truncated
+        fi
+    done
+}
+
+forward() { kill -"$1" "${AGENT_PID}" 2>/dev/null || true }
+trap 'forward INT' INT
+trap 'forward TERM' TERM
+trap 'forward HUP' HUP
+trap 'forward WINCH' WINCH
+
+sandbox-exec -f "${POLICY_FILE}" "${AGENT_BIN}" "$@" &
+AGENT_PID=$!
+supervise &
+SUPERVISOR_PID=$!
+write_meta "${AGENT_PID}" "${SUPERVISOR_PID}"
+
+set +e
+rc=0
+while kill -0 "${AGENT_PID}" 2>/dev/null; do
+    wait "${AGENT_PID}"
+    rc=$?
+done
+kill -KILL "${SUPERVISOR_PID}" 2>/dev/null
+cleanup_session
+exit "${rc}"

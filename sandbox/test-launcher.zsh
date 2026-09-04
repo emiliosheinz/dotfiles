@@ -70,4 +70,51 @@ check "session log created" '[[ -f "${SANDBOX_STATE_ROOT}/sessions/${sid}/log.js
 meta="${SANDBOX_STATE_ROOT}/host/meta/${sid}.json"
 check "host meta written with workdir" '[[ "$(jq -r .workdir "$meta")" == "${work:A}" ]]'
 check "SANDBOX_RUN_AGENT_BIN override honoured" '(cd "${work}" && SANDBOX_RUN_AGENT_BIN="${stubs}/claude" "${launcher}" claude) && [[ -s "$envf" ]]'
+# --- SBOX-09: exit status, signals, supervisor lifetime ---------------------
+cat > "${stubs}/claude" <<'STUB'
+#!/bin/zsh
+exit 7
+STUB
+(cd "${work}" && PATH="${stubs}:${PATH}" "${launcher}" claude 2>/dev/null); rc=$?
+check "agent exit status propagated" '(( rc == 7 ))'
+queues=("${SANDBOX_STATE_ROOT}"/sessions/*/requests(N)); logs=("${SANDBOX_STATE_ROOT}"/sessions/*/log.jsonl(N))
+check "session queue removed after exit, log kept" '(( ${#queues} == 0 && ${#logs} > 0 ))'
+
+cat > "${stubs}/claude" <<'STUB'
+#!/bin/zsh
+trap 'echo SIGTERM > "${PWD}/signal.txt"; exit 143' TERM
+echo $$ > "${PWD}/agent.pid"
+while :; do sleep 1; done
+STUB
+wait_for() { local i; for i in {1..50}; do eval "$1" && return 0; sleep 0.1; done; return 1 }
+rm -f "${work}/agent.pid" "${work}/signal.txt"
+(cd "${work}" && PATH="${stubs}:${PATH}" "${launcher}" claude 2>/dev/null) &
+lpid=$!
+wait_for '[[ -s "${work}/agent.pid" ]]'
+kill -TERM "${lpid}"
+wait "${lpid}"; rc=$?
+check "SIGTERM forwarded to the agent" '[[ "$(cat "${work}/signal.txt" 2>/dev/null)" == SIGTERM ]]'
+check "launcher exits with the agent's status after SIGTERM" '(( rc == 143 ))'
+
+rm -f "${work}/agent.pid"
+(cd "${work}" && PATH="${stubs}:${PATH}" "${launcher}" claude 2>/dev/null) &
+lpid=$!
+wait_for '[[ -s "${work}/agent.pid" ]]'
+sid=$(ls -t "${SANDBOX_STATE_ROOT}/host/meta" | head -1 | sed 's/\.json$//')
+sup=$(jq -r .supervisor_pid "${SANDBOX_STATE_ROOT}/host/meta/${sid}.json")
+kill -KILL "$(cat "${work}/agent.pid")"
+start=$SECONDS
+wait "${lpid}"; rc=$?
+check "SIGKILLed agent: launcher exits within 5 s with 137" '(( SECONDS - start <= 5 && rc == 137 ))'
+check "SIGKILLed agent: supervisor gone" '! kill -0 "${sup}" 2>/dev/null'
+
+rm -f "${work}/agent.pid"
+(cd "${work}" && PATH="${stubs}:${PATH}" "${launcher}" claude 2>/dev/null) &
+lpid=$!
+wait_for '[[ -s "${work}/agent.pid" ]]'
+sid=$(ls -t "${SANDBOX_STATE_ROOT}/host/meta" | head -1 | sed 's/\.json$//')
+sup=$(jq -r .supervisor_pid "${SANDBOX_STATE_ROOT}/host/meta/${sid}.json")
+kill -KILL "${lpid}"; wait "${lpid}" 2>/dev/null
+check "SIGKILLed launcher: supervisor exits within 5 s" 'wait_for "! kill -0 ${sup} 2>/dev/null"'
+kill -KILL "$(cat "${work}/agent.pid")" 2>/dev/null
 exit $fail
