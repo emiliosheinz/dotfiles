@@ -32,7 +32,8 @@
     (home-subpath "/.cache")                       ;; XDG cache: zsh compdump, tool caches
     (home-subpath "/.oh-my-zsh/cache")             ;; completion cache written on every interactive start
     (home-subpath "/Library/Containers/com.docker.docker/Data/log")  ;; docker-credential-desktop log; every image pull fails without it
-    (home-subpath "/Library/Caches/ms-playwright-mcp")   ;; Playwright MCP browser profile (the generator grants only ms-playwright)
+    (home-subpath "/Library/Caches")               ;; macOS tool caches: pip, uv, node-gyp, Homebrew, and the Playwright MCP profile the generator misses
+    (home-subpath "/Library/Python")               ;; `pip install --user` target; absent until the first install, so the grant covers creating it
 )
 ;; docker-credential-desktop stats each ancestor of its log dir before creating it
 (allow file-read-metadata
