@@ -17,6 +17,16 @@ check "picks highest by version sort with args" '[[ "$out" == "stub-10.0.0 --ver
 rm "${versions}/10.0.0"
 out=$(CLAUDE_VERSIONS_DIR="${versions}" zsh "${launcher}")
 check "falls back to the previous version once removed" '[[ "$out" == "stub-2.0.0 " ]]'
+
+# An update killed mid-transfer leaves versions/<v> non-executable.
+printf '#!/bin/sh\necho "stub-9.9.9 $*"\n' > "${versions}/9.9.9"; chmod 600 "${versions}/9.9.9"
+out=$(CLAUDE_VERSIONS_DIR="${versions}" zsh "${launcher}")
+check "skips a non-executable version instead of failing to exec" '[[ "$out" == "stub-2.0.0 " ]]'
+check "leaves a fresh non-executable version for the session downloading it" '[[ -e "${versions}/9.9.9" ]]'
+touch -A -011000 "${versions}/9.9.9"
+CLAUDE_VERSIONS_DIR="${versions}" zsh "${launcher}" >/dev/null
+check "reaps a stale non-executable version so the updater retries it" '[[ ! -e "${versions}/9.9.9" ]]'
+
 rm "${versions}/2.0.0"
 CLAUDE_VERSIONS_DIR="${versions}" zsh "${launcher}" 2>/dev/null; rc=$?
 check "no versions installed exits non-zero" '(( rc != 0 ))'

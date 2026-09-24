@@ -6,7 +6,14 @@
 set -euo pipefail
 
 versions_dir="${CLAUDE_VERSIONS_DIR:-${HOME}/.local/share/claude/versions}"
-latest=$(print -l "${versions_dir}"/[0-9]*(N:t) | sort -V | tail -n 1)
+# Reap abandoned downloads. The updater creates versions/<v> non-executable and
+# chmods it only once the transfer completes, so a session killed mid-update
+# leaves a newer-sorting file that cannot be exec'd -- and that the updater
+# counts as already installed, so it never retries. `^*^` selects the
+# non-executable ones; `mm+10` spares a download another session is still doing.
+rm -f -- "${versions_dir}"/[0-9]*(N.^*^mm+10)
+# The `*` qualifier skips a download that is in flight right now.
+latest=$(print -l "${versions_dir}"/[0-9]*(N*:t) | sort -V | tail -n 1)
 if [[ -z "${latest}" ]]; then
     print -u2 "claude: no installed versions under ${versions_dir}"
     exit 1
