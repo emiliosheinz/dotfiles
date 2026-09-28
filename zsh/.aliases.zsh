@@ -68,15 +68,15 @@ ws() {
 }
 
 # Headed Chrome for agent automation: remote debugging on loopback with a
-# dedicated profile; agents inside the sandbox connect over CDP on :9222.
+# dedicated profile; agents connect over CDP on :9222.
 alias agent-chrome='"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir="$HOME/.local/state/agent-chrome" >/dev/null 2>&1 &'
 
-# Sandboxed agents — run claude and opencode under sandbox-exec.
-# sandbox-run renders the policy with agent-safehouse plus
-# ~/dotfiles/sandbox/overrides.sb; `command claude` is the break-glass path.
+# Sandboxed agents — run claude and opencode under sandbox-exec with
+# workspace isolation (see sandbox-run). Claude starts in auto mode from its
+# user settings; `command claude` is the break-glass path.
 if [[ -x "${HOME}/.local/scripts/sandbox-run" ]]; then
   function claude() {
-    sandbox-run claude --dangerously-skip-permissions "$@"
+    sandbox-run claude "$@"
   }
   function opencode() {
     OPENCODE_PERMISSION='{"*":"allow"}' sandbox-run opencode "$@"

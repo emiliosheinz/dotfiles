@@ -36,13 +36,11 @@
 - Homebrew prefix: `~/.homebrew`.
 - Aliases that affect scripted behavior: `cat` → bat, `cd` → zoxide, `ls`/`ll`/`la`/`lt` → eza.
 
-## Sandbox 
+## Sandbox
 
-- You run under a macOS sandbox scoped to the launch directory and the active workspace. `ps`, `pgrep`, `kill`, Homebrew reads, `gh`, `git push`, the Playwright MCP, Chrome (`--no-sandbox`) and the Docker CLI work directly.
-- Host-only actions go through `hostrun <command>`: `open <url>`, `brew install`, `hostrun open -a Docker` to start Docker Desktop. `ws` verbs route themselves. `open https://…` and `ws wt add` run without approval; everything else prompts the user and times out after 30 s.
-- `hostrun` is non-interactive: `gh auth login` and other TTY prompts are for the user to run; ask them.
-- Never pass secrets on a `hostrun` command line; it is logged.
-- When the sandbox blocks you (`Operation not permitted`, `EPERM`), run `sandbox-note "<what you wanted>" "<why>"` once and continue another way. Do not retry, bypass, or edit the policy.
+- Launched under `~/dev`, you run in a macOS sandbox that makes primary-clone source (`~/dev/<repo>/` outside `.git/`) and other workspaces under `~/dev/.worktrees/` read-only. Change a repo through a worktree enlisted with `ws wt add`. Everything else works directly: `ws`, `wt`, git, tmux, Homebrew, `gh`, Docker, `open`.
+- A tool cannot start its own sandbox inside this one. `sandbox_apply: Operation not permitted` means a nested sandbox: use the tool's no-sandbox flag (Chrome and Playwright take `--no-sandbox`) or ask the user to run it on the host.
+- `Operation not permitted` on a path means you targeted the wrong place. Do not retry, bypass or disable the sandbox; running unsandboxed is the user's call.
 
 ## Git
 

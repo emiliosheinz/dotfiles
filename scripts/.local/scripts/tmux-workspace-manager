@@ -2,16 +2,6 @@
 
 MODE="${1:-switch}"
 
-# Inside an agent sandbox (sandbox-run exports SANDBOX_SESSION_ID) the tmux
-# socket is denied; every verb except `workspace` runs on the host through
-# the hostrun broker with the argv untouched (`ws wt add` is auto-approved).
-if [[ -n "${SANDBOX_SESSION_ID:-}" ]]; then
-    case "$MODE" in
-        workspace|help|-h|--help) ;;
-        *) exec hostrun ws "$@" ;;
-    esac
-fi
-
 get_workspaces() {
     tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -v "^backstage-"
 }
@@ -112,30 +102,80 @@ split_wt_execute_args() {
     done
 }
 
+workspace_dir() {
+    # Folder name worktrunk gives a workspace under ~/dev/.worktrees:
+    # `{{ branch | sanitize }}` maps `/` and `\` to `-`.
+    local dir="${1//\//-}"
+    printf '%s\n' "${dir//\\/-}"
+}
+
+workspace_branch() {
+    # Usage: workspace_branch <source repo> <workspace folder>
+    # Prints the branch the workspace owns in <source repo>: the one whose
+    # workspace_dir is the folder name (feat/x owns folder feat-x). Prints
+    # nothing when the repo has no such branch.
+    local src="$1" folder="$2" branch
+    while IFS= read -r branch; do
+        if [[ "$(workspace_dir "$branch")" == "$folder" ]]; then
+            printf '%s\n' "$branch"
+            return 0
+        fi
+    done < <(git -C "$src" for-each-ref --format='%(refname:short)' refs/heads/ 2>/dev/null)
+}
+
+remove_worktree() {
+    # Usage: remove_worktree <worktree dir> <source repo> <workspace branch> <force: 0|1>
+    # Removes the worktree whatever branch is checked out in it (branches can
+    # be switched inside a worktree). Only the workspace branch is deleted;
+    # any other branch checked out there is the user's and is kept. In
+    # non-force mode an unmerged workspace branch is kept and reported as
+    # "branch unmerged". Skips the worktree step when the dir is already gone.
+    local repo_dir="$1" src="$2" branch="$3" force="$4" current
+    local flags=(--foreground)
+    [[ "$force" == 1 ]] && flags+=(--force)
+    if [[ -d "$repo_dir" ]]; then
+        current=$(git -C "$repo_dir" branch --show-current 2>/dev/null)
+        if [[ -n "$branch" && "$current" == "$branch" ]]; then
+            [[ "$force" == 1 ]] && flags+=(--force-delete)
+            (cd "$repo_dir" && wt remove "${flags[@]}" </dev/null)
+            return
+        fi
+        (cd "$repo_dir" && wt remove "${flags[@]}" --no-delete-branch </dev/null) || return
+        [[ -n "$current" ]] && echo "branch $current kept (not the workspace branch)"
+    fi
+    [[ -n "$branch" ]] || return 0
+    git -C "$src" show-ref --verify --quiet "refs/heads/$branch" || return 0
+    if [[ "$force" == 1 ]]; then
+        git -C "$src" branch -D "$branch"
+    elif ! git -C "$src" branch -d "$branch" >/dev/null 2>&1; then
+        echo "workspace branch $branch kept: branch unmerged"
+    fi
+}
+
 remove_workspace_worktrees() {
-    # Runs `wt remove` for every repo subdirectory under
-    # ~/dev/.worktrees/<workspace>/, then cleans up the workspace folder.
+    # Runs remove_worktree for every repo subdirectory under
+    # ~/dev/.worktrees/<folder>/, then cleans up the workspace folder.
     # The filesystem is the sole source of truth — a repo without a subdir
     # here is untouched (any lingering git-side registration is left as
     # manual cleanup).
     #
-    # Usage: remove_workspace_worktrees <workspace> <mode>
-    #   mode=kill    unconditional --force --force-delete; no prompt;
-    #                final cleanup is `rm -rf` (kill is the "burn it down" verb).
-    #   mode=remove  soft --foreground first; on dirty/unmerged, prompt once
-    #                to re-run with --force --force-delete; final cleanup is
-    #                `rmdir` (only removes if empty; caller-visible non-zero
-    #                exit if not).
+    # Usage: remove_workspace_worktrees <workspace folder> <mode>
+    #   mode=kill    unconditional force removal and branch deletion; no
+    #                prompt; final cleanup is `rm -rf` (kill is the "burn it
+    #                down" verb).
+    #   mode=remove  soft removal first; on dirty/unmerged, prompt once to
+    #                re-run with force; final cleanup is `rmdir` (only removes
+    #                if empty; caller-visible non-zero exit if not).
     #
     # --foreground is required: without it `wt remove` returns before the
     # worktree dir is gone, and the trailing rm/rmdir loses the race.
     #
     # Preserving .spec/* and pruning empty parent dirs happen in wt's
     # pre-remove/post-remove hooks (see ~/.config/worktrunk/config.toml).
-    local workspace="$1"
+    local folder="$1"
     local mode="$2"
     local worktrees_root="$HOME/dev/.worktrees"
-    local root="$worktrees_root/$workspace"
+    local root="$worktrees_root/$folder"
 
     local repos_list=""
     if [[ -d "$root" ]]; then
@@ -147,23 +187,25 @@ remove_workspace_worktrees() {
     fi
 
     local dirty_repos=() unmerged_repos=()
-    local repo_dir repo_name output exit_code tail line src
+    local repo_dir repo_name src branch output exit_code tail line
 
     if [[ "$mode" == "kill" ]]; then
-        echo "ws kill: $workspace"
-        echo "  removing worktrees + local branches..."
+        echo "ws kill: $folder"
+        echo "  removing worktrees + workspace branches..."
     else
-        echo "ws wt remove: $workspace"
+        echo "ws wt remove: $folder"
     fi
 
     while IFS= read -r repo_name; do
         [[ -z "$repo_name" ]] && continue
         repo_dir="$root/$repo_name"
+        src="$HOME/dev/$repo_name"
+        branch=$(workspace_branch "$src" "$folder")
         echo "  - $repo_name: removing..."
         if [[ "$mode" == "kill" ]]; then
-            output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$workspace" </dev/null) 2>&1 )
+            output=$(remove_worktree "$repo_dir" "$src" "$branch" 1 2>&1)
         else
-            output=$( (cd "$repo_dir" && wt remove --foreground "$workspace" </dev/null) 2>&1 )
+            output=$(remove_worktree "$repo_dir" "$src" "$branch" 0 2>&1)
         fi
         exit_code=$?
         tail=$(printf '%s' "$output" | tail -n 3)
@@ -185,6 +227,7 @@ remove_workspace_worktrees() {
             done <<< "$tail"
         else
             echo "    removed"
+            printf '%s\n' "$output" | grep "kept (not the workspace branch)" | sed 's/^/      /'
         fi
     done <<< "$repos_list"
 
@@ -192,26 +235,19 @@ remove_workspace_worktrees() {
         local need_force=$((${#dirty_repos[@]} + ${#unmerged_repos[@]}))
         if [[ $need_force -gt 0 && -r /dev/tty ]]; then
             local answer=""
-            printf '  Force remove %d pending worktree(s) with --force --force-delete? [y/N] ' "$need_force" >&2
+            printf '  Force remove %d pending worktree(s) and delete their workspace branch? [y/N] ' "$need_force" >&2
             IFS= read -r answer </dev/tty
             if [[ "$answer" == [yY] || "$answer" == [yY][eE][sS] ]]; then
                 for repo_name in "${dirty_repos[@]}" "${unmerged_repos[@]}"; do
                     repo_dir="$root/$repo_name"
+                    src="$HOME/dev/$repo_name"
                     echo "  - $repo_name: force-removing..."
-                    if [[ -d "$repo_dir" ]]; then
-                        output=$( (cd "$repo_dir" && wt remove --force --force-delete --foreground "$workspace" </dev/null) 2>&1 )
+                    if [[ -d "$src" ]]; then
+                        output=$(remove_worktree "$repo_dir" "$src" "$(workspace_branch "$src" "$folder")" 1 2>&1)
                         exit_code=$?
                     else
-                        # Worktree already gone (unmerged case): rerun from
-                        # source repo to also delete the branch.
-                        src="$HOME/dev/$repo_name"
-                        if [[ -d "$src" ]]; then
-                            output=$( wt -C "$src" remove --force --force-delete --foreground "$workspace" </dev/null 2>&1 )
-                            exit_code=$?
-                        else
-                            output="cannot locate source repo at $src"
-                            exit_code=1
-                        fi
+                        output="cannot locate source repo at $src"
+                        exit_code=1
                     fi
                     if [[ $exit_code -eq 0 ]]; then
                         echo "    force-removed"
@@ -251,8 +287,7 @@ remove_workspace_worktrees() {
 
 resolve_workspace() {
     # A launcher-provided workspace (sandbox-run exports WS_WORKSPACE inside
-    # the sandbox, the hostrun broker sets it on the host) wins over tmux,
-    # which is unreachable from inside.
+    # the sandbox) wins over tmux, whose session may not match the launch dir.
     if [[ -n "${WS_WORKSPACE:-}" ]]; then
         printf '%s\n' "$WS_WORKSPACE"
         return 0
@@ -318,7 +353,7 @@ case "$MODE" in
             printf '%s\n' "$workspace"
             exit 0
         fi
-        echo "ws workspace: no active workspace resolvable. Launch from a workspace pane (tmux session named after the workspace) or cd into a worktree under ~/dev/.worktrees/<workspace>/." >&2
+        echo "ws workspace: no active workspace resolvable. Launch from a workspace pane (tmux session named after the workspace)." >&2
         exit 1
         ;;
     switch)
@@ -375,7 +410,7 @@ case "$MODE" in
 
         # Clean worktrees first: killing the session that hosts this script
         # would terminate the cleanup mid-run.
-        remove_workspace_worktrees "$selected" kill
+        remove_workspace_worktrees "$(workspace_dir "$selected")" kill
 
         tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -E "^backstage-${selected}(-|$)" | while read -r session; do
             tmux kill-session -t "$session"
@@ -457,7 +492,7 @@ case "$MODE" in
                 workspace="${ws_positionals[1]:-}"
                 if [[ -z "$workspace" ]]; then
                     if ! workspace=$(resolve_workspace); then
-                        echo "ws wt add: no workspace resolvable. Pass an explicit workspace (ws wt add $repo <workspace> [-b <base>] [wt-flags...]), launch from a workspace pane, or cd into a worktree under ~/dev/.worktrees/<workspace>/." >&2
+                        echo "ws wt add: no workspace resolvable. Pass an explicit workspace (ws wt add $repo <workspace> [-b <base>] [wt-flags...]), or launch from a workspace pane." >&2
                         exit 1
                     fi
                 fi

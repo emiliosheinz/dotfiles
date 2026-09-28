@@ -1,9 +1,8 @@
 # Multi-Repo Workspaces at `~/dev/`
 
-_These rules are enforced by the macOS sandbox at the filesystem level.
-Crossing a boundary fails the tool call. Follow them deliberately — do not
-retry past a denied read or write, do not bypass, do not try to edit the
-policy._
+_Other workspaces and primary-clone source are blocked by the OS for
+writes. Crossing a boundary fails the tool call with `Operation not
+permitted`. Do not retry past a denied write and do not try to bypass it._
 
 ## The workspace model
 
@@ -21,6 +20,11 @@ multiple repos in parallel — and how you keep several features in flight on
 the same repo without stepping on each other.
 
 Run `ws workspace` to print the active workspace name.
+
+Switching branches inside a worktree (`git switch`) is fine: the workspace is
+the folder, not the branch. `ws wt remove` and `ws kill` remove each worktree
+whatever it has checked out, delete only the workspace's own branch and keep
+any other branch.
 
 ## Layout
 
@@ -50,19 +54,21 @@ ws wt add <repo> -b <base>
 ```
 
 This materializes `~/dev/.worktrees/<workspace>/<repo>/` without changing
-your current directory; it runs on the host through `hostrun` and needs no
-approval. Do not call `wt` directly — `ws wt add` resolves the workspace and
+your current directory; it runs directly inside the sandbox. Do not call `wt`
+directly — `ws wt add` resolves the workspace and
 validates the target repo for you.
 
 ## Permissions
 
+- **Reads** are allowed everywhere.
 - **Writes allowed** on:
   - `~/dev/.worktrees/<workspace>/**` — the current workspace's worktrees.
   - `~/dev/<repo>/.git/**` — git metadata under the primary clone (refs,
-    objects, worktrees), except `.git/hooks/` and `.git/config`, which are
-    read-only. Do not edit source files in the primary clone yourself.
-- **Reads and writes denied** on `~/dev/.worktrees/<other-workspace>/**`.
-  Other workspaces are invisible to you. This isolation is intentional.
+    objects, worktrees).
+  - anything else under `~/dev/` that is not a repo (e.g. `~/dev/.specs/`).
+- **Writes denied** on primary-clone source (`~/dev/<repo>/` outside
+  `.git/`) and on `~/dev/.worktrees/<other-workspace>/**`. Do not change
+  another workspace's branches through the shared `.git` either.
 
 A permission-denied error means you targeted the wrong path. Re-check the
 active workspace with `ws workspace` and the path you used.
