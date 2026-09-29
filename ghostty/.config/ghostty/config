@@ -4,6 +4,7 @@ font-style = Retina
 font-size = 14
 adjust-cell-height = 20%
 font-thicken = true
+minimum-contrast = 1.1
 
 macos-titlebar-style = hidden
 
