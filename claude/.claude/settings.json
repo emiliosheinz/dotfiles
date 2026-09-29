@@ -1,4 +1,62 @@
 {
+  "env": {
+    "DISABLE_AUTOUPDATER": "1"
+  },
+  "permissions": {
+    "defaultMode": "auto"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ws-agents set idle"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ws-agents set working"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ws-agents set blocked"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ws-agents set idle"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ws-agents clear"
+          }
+        ]
+      }
+    ]
+  },
   "statusLine": {
     "type": "command",
     "command": "npx ccstatusline@latest",
@@ -22,11 +80,6 @@
       }
     }
   },
-  "env": {
-    "DISABLE_AUTOUPDATER": "1"
-  },
-  "agentPushNotifEnabled": true,
-  "permissions": {
-    "defaultMode": "auto"
-  }
+  "theme": "dark-ansi",
+  "agentPushNotifEnabled": true
 }

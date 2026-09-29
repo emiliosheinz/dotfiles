@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# ws-agents: agent state for the tmux status line.
+#
+#   set <state>       record the calling pane's agent state (called from agent hooks)
+#   clear             forget the calling pane
+#   agents <session>  print every agent in one workspace as glyph + name (status-right)
+#   pick              fzf every agent in every workspace and jump to the one picked
+#
+# A pane is an agent when it runs one, whether or not it has reported state yet;
+# an agent with no state reads as idle. State lives in one file per pane so
+# rendering stays a few file reads: no pane scraping, no polling process. Dead
+# panes are pruned when state is written, the one path that is not on the status
+# line's redraw.
+
+STATE_DIR="$HOME/.cache/ws-agents"
+
+# Catppuccin mocha, spelled out: `#()` output is re-expanded by tmux, but the
+# @thm_* user options are not in scope there.
+DIM="#7f849c"
+WORKING="#a6e3a1"
+BLOCKED="#f38ba8"
+
+# agent_name <pane command>: print the agent the pane runs, or fail when it
+# runs something else. Claude reports its version as the process name, the same
+# quirk automatic-rename-format works around in .tmux.conf.
+agent_name() {
+    if [[ "$1" =~ ^[0-9][0-9.]*[0-9]$ ]]; then
+        printf 'claude\n'
+        return 0
+    fi
+    case "$1" in
+        claude*) printf 'claude\n' ;;
+        opencode*) printf 'opencode\n' ;;
+        *) return 1 ;;
+    esac
+}
+
+# glyph_for <state>: print the styled glyph, or nothing when the state is empty.
+glyph_for() {
+    case "$1" in
+        blocked) printf '#[fg=%s]●' "$BLOCKED" ;;
+        working) printf '#[fg=%s]●' "$WORKING" ;;
+        idle)    printf '#[fg=%s]○' "$DIM" ;;
+    esac
+}
+
+# state_of <pane id>: print the pane's recorded state, defaulting to idle.
+state_of() {
+    local state
+    { read -r state < "$STATE_DIR/${1#%}"; } 2>/dev/null || state="idle"
+    printf '%s\n' "${state:-idle}"
+}
+
+case "${1:-}" in
+    set)
+        [[ -n "${2:-}" ]] || { echo "ws-agents set: state required" >&2; exit 1; }
+        [[ -n "$TMUX_PANE" ]] || exit 0
+        mkdir -p "$STATE_DIR"
+        printf '%s\n' "$2" > "$STATE_DIR/${TMUX_PANE#%}"
+        tmux refresh-client -S 2>/dev/null
+
+        live=$(tmux list-panes -a -F '#{pane_id}' 2>/dev/null) || exit 0
+        for file in "$STATE_DIR"/*; do
+            [[ -e "$file" ]] || continue
+            case $'\n'"$live"$'\n' in
+                *$'\n'"%${file##*/}"$'\n'*) ;;
+                *) rm -f "$file" ;;
+            esac
+        done
+        ;;
+    clear)
+        [[ -n "$TMUX_PANE" ]] || exit 0
+        rm -f "$STATE_DIR/${TMUX_PANE#%}"
+        tmux refresh-client -S 2>/dev/null
+        ;;
+    agents)
+        [[ -n "${2:-}" ]] || { echo "ws-agents agents: session required" >&2; exit 1; }
+        separator=""
+        while IFS='|' read -r pane command; do
+            name=$(agent_name "$command") || continue
+            printf '%s%s#[fg=%s] %s' "$separator" "$(glyph_for "$(state_of "$pane")")" "$DIM" "$name"
+            separator="  "
+        done < <(tmux list-panes -s -t "$2" -F '#{pane_id}|#{pane_current_command}' 2>/dev/null)
+        echo
+        ;;
+    pick)
+        list=$(tmux list-panes -a -F '#{pane_id}|#{session_name}|#{window_index}:#{window_name}|#{pane_current_command}' 2>/dev/null) || exit 0
+        rows=""
+        while IFS='|' read -r pane session window command; do
+            name=$(agent_name "$command") || continue
+            rows+=$(printf '%s\t%-20s %-24s %-9s %s' "$pane" "$session" "$window" "$name" "$(state_of "$pane")")$'\n'
+        done <<< "$list"
+        if [[ -z "$rows" ]]; then
+            echo "no agents running"
+            exit 0
+        fi
+
+        pane=$(printf '%s' "$rows" | fzf --prompt="agent: " --delimiter='\t' --with-nth=2.. \
+            --preview='tmux capture-pane -p -e -t {1}' --preview-window=down,60% | cut -f1)
+        [[ -n "$pane" ]] || exit 0
+        tmux switch-client -t "$pane"
+        tmux select-window -t "$pane"
+        tmux select-pane -t "$pane"
+        ;;
+    *)
+        echo "ws-agents: unknown command: ${1:-<none>}" >&2
+        exit 1
+        ;;
+esac
