@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # ws: tmux workspace manager.
-# Workspaces are tmux sessions. Sessions prefixed with "backstage-" are
-# internal and excluded from all workspace listings.
+# Workspaces are tmux sessions.
 # Typed queries are normalised (spaces and dots → hyphens, trailing hyphens
 # stripped) before use as a session name.
 #

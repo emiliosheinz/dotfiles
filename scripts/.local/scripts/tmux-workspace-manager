@@ -3,7 +3,9 @@
 MODE="${1:-switch}"
 
 get_workspaces() {
-    tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -v "^backstage-"
+    # Most recently attached first: fzf's default layout renders it at the bottom, next to the prompt
+    tmux list-sessions -F "#{session_last_attached} #{session_name}" 2>/dev/null \
+        | sort -rn | cut -d' ' -f2-
 }
 
 is_branch_shortcut() {
@@ -292,9 +294,6 @@ resolve_workspace() {
         printf '%s\n' "$WS_WORKSPACE"
         return 0
     fi
-    # Backstage sessions are named `backstage-<parent>`. Derive the parent by
-    # stripping the prefix — the naming convention survives tmux restore,
-    # whereas the @parent_session user option does not.
     if [[ -z "$TMUX" ]]; then
         return 1
     fi
@@ -302,12 +301,6 @@ resolve_workspace() {
     session=$(tmux display-message -p '#S' 2>/dev/null)
     if [[ -z "$session" ]]; then
         return 1
-    fi
-    if [[ "$session" == backstage-* ]]; then
-        session="${session#backstage-}"
-        if [[ -z "$session" ]] || ! tmux has-session -t "$session" 2>/dev/null; then
-            return 1
-        fi
     fi
     printf '%s\n' "$session"
 }
@@ -319,7 +312,7 @@ Usage: ws <command> [args...]
 Commands:
   switch [name]         fzf-pick or type a workspace to switch to (or create)
   kill                  fzf-pick a workspace to kill (removes its worktrees and tears down its tmux sessions)
-  workspace             print the active workspace name; refuses on backstage / outside tmux
+  workspace             print the active workspace name; refuses outside tmux
   wt <verb> [args...]   worktree operations (see `ws wt help`)
   help                  show this help
 
@@ -357,23 +350,10 @@ case "$MODE" in
         exit 1
         ;;
     switch)
-        result=$(get_workspaces | fzf --expect=alt-enter --print-query --prompt="workspace: ")
+        result=$(get_workspaces | fzf --print-query --prompt="workspace: ")
 
         query=$(printf "%s" "$result" | head -1)
-        key=$(printf "%s" "$result" | sed -n '2p')
-        selected=$(printf "%s" "$result" | sed -n '3p')
-
-        # alt-enter on an existing workspace whose backstage exists: jump
-        # straight to the backstage. Every other case falls through to the
-        # standard switch-or-create-workspace path below.
-        if [[ "$key" == "alt-enter" && -n "$selected" ]] && tmux has-session -t "backstage-${selected}" 2>/dev/null; then
-            if [[ -z $TMUX ]]; then
-                tmux attach-session -t "backstage-${selected}"
-            else
-                tmux switch-client -t "backstage-${selected}"
-            fi
-            exit 0
-        fi
+        selected=$(printf "%s" "$result" | sed -n '2p')
 
         if [[ -n $selected ]]; then
             session_name="$selected"
@@ -411,10 +391,6 @@ case "$MODE" in
         # Clean worktrees first: killing the session that hosts this script
         # would terminate the cleanup mid-run.
         remove_workspace_worktrees "$(workspace_dir "$selected")" kill
-
-        tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -E "^backstage-${selected}(-|$)" | while read -r session; do
-            tmux kill-session -t "$session"
-        done
 
         tmux kill-session -t "$selected"
         ;;
@@ -514,37 +490,6 @@ case "$MODE" in
                 echo "ws wt: unknown subcommand: ${subcommand:-<none>}" >&2
                 print_wt_usage >&2
                 exit 1
-                ;;
-        esac
-        ;;
-    backstage)
-        subcommand="${2:-}"
-        case "$subcommand" in
-            enter)
-                session_name="$3"
-                current_path="$4"
-
-                target="backstage-${session_name}"
-
-                if ! tmux has-session -t "$target" 2>/dev/null; then
-                    tmux new-session -d -s "$target" -c "$current_path"
-                fi
-
-                tmux switch-client -t "$target"
-                ;;
-            leave)
-                # Parent is derived from the `backstage-<parent>` naming
-                # convention so it survives tmux restore (user options do not).
-                backstage_session="$3"
-
-                parent=""
-                if [[ "$backstage_session" == backstage-* ]]; then
-                    parent="${backstage_session#backstage-}"
-                fi
-                if [ -z "$parent" ] || ! tmux has-session -t "$parent" 2>/dev/null; then
-                    parent=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -v '^backstage-' | head -1)
-                fi
-                [ -n "$parent" ] && tmux switch-client -t "$parent" || tmux detach-client
                 ;;
         esac
         ;;
