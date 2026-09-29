@@ -22,6 +22,9 @@
       }
     }
   },
+  "env": {
+    "DISABLE_AUTOUPDATER": "1"
+  },
   "agentPushNotifEnabled": true,
   "permissions": {
     "defaultMode": "auto"
