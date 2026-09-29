@@ -80,6 +80,6 @@
       }
     }
   },
-  "theme": "dark-ansi",
+  "theme": "dark",
   "agentPushNotifEnabled": true
 }
