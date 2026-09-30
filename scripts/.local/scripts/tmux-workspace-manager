@@ -295,6 +295,20 @@ new_workspace() {
     tmux new-window -dt "$session:" -c "$HOME" -n agents
 }
 
+add_repo_window() {
+    # Usage: add_repo_window <workspace> <repo>
+    # A repo enlisted into a workspace gets its own window, named after the repo
+    # and rooted in its worktree. No-op when the worktree is missing, the
+    # workspace has no tmux session, or the window already exists: `ws wt add`
+    # is re-runnable.
+    local session="$1" repo="$2"
+    local dir="$HOME/dev/.worktrees/$(workspace_dir "$session")/$repo"
+    [[ -d "$dir" ]] || return 0
+    tmux has-session -t="$session" 2>/dev/null || return 0
+    tmux list-windows -t "$session" -F '#{window_name}' 2>/dev/null | grep -qxF "$repo" && return 0
+    tmux new-window -dt "$session:" -c "$dir" -n "$repo"
+}
+
 resolve_workspace() {
     # A launcher-provided workspace (sandbox-run exports WS_WORKSPACE inside
     # the sandbox) wins over tmux, whose session may not match the launch dir.
@@ -492,7 +506,11 @@ case "$MODE" in
                 else
                     wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$workspace"
                 fi
-                exit $?
+                status=$?
+                if [[ $status -eq 0 ]]; then
+                    add_repo_window "$workspace" "$repo"
+                fi
+                exit $status
                 ;;
             *)
                 echo "ws wt: unknown subcommand: ${subcommand:-<none>}" >&2
