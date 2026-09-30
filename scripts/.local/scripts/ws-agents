@@ -21,8 +21,8 @@ WORKING="#a6e3a1"
 BLOCKED="#f38ba8"
 
 # agent_name <pane command>: print the agent the pane runs, or fail when it
-# runs something else. Claude reports its version as the process name, the same
-# quirk automatic-rename-format works around in .tmux.conf.
+# runs something else. Claude reports its version as the process name, hence the
+# numeric match.
 agent_name() {
     if [[ "$1" =~ ^[0-9][0-9.]*[0-9]$ ]]; then
         printf 'claude\n'

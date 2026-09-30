@@ -287,6 +287,14 @@ remove_workspace_worktrees() {
     return 1
 }
 
+new_workspace() {
+    # Every workspace is born with the same two windows: a shell to work in and
+    # a window to run agents in. Names stick because automatic-rename is off.
+    local session="$1"
+    tmux new-session -ds "$session" -c "$HOME" -n shell
+    tmux new-window -dt "$session:" -c "$HOME" -n agents
+}
+
 resolve_workspace() {
     # A launcher-provided workspace (sandbox-run exports WS_WORKSPACE inside
     # the sandbox) wins over tmux, whose session may not match the launch dir.
@@ -366,13 +374,13 @@ case "$MODE" in
         tmux_running=$(pgrep tmux)
 
         if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
-            tmux new-session -ds "$session_name" -c "$HOME"
+            new_workspace "$session_name"
             tmux attach-session -t "$session_name"
             exit 0
         fi
 
         if ! tmux has-session -t="$session_name" 2>/dev/null; then
-            tmux new-session -ds "$session_name" -c "$HOME"
+            new_workspace "$session_name"
         fi
 
         if [[ -z $TMUX ]]; then
