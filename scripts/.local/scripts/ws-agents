@@ -85,15 +85,31 @@ case "${1:-}" in
         ;;
     pick)
         list=$(tmux list-panes -a -F '#{pane_id}|#{session_name}|#{window_index}:#{window_name}|#{pane_current_command}' 2>/dev/null) || exit 0
-        rows=""
+        panes=() sessions=() windows=() names=() states=()
+        session_width=0 window_width=0 name_width=0
         while IFS='|' read -r pane session window command; do
             name=$(agent_name "$command") || continue
-            rows+=$(printf '%s\t%-20s %-24s %-9s %s' "$pane" "$session" "$window" "$name" "$(state_of "$pane")")$'\n'
+            panes+=("$pane")
+            sessions+=("$session")
+            windows+=("$window")
+            names+=("$name")
+            states+=("$(state_of "$pane")")
+            (( ${#session} > session_width )) && session_width=${#session}
+            (( ${#window} > window_width )) && window_width=${#window}
+            (( ${#name} > name_width )) && name_width=${#name}
         done <<< "$list"
-        if [[ -z "$rows" ]]; then
+        if (( ${#panes[@]} == 0 )); then
             echo "no agents running"
             exit 0
         fi
+
+        rows=""
+        for i in "${!panes[@]}"; do
+            rows+=$(printf '%s\t%-*s  %-*s  %-*s  %s' "${panes[i]}" \
+                "$session_width" "${sessions[i]}" \
+                "$window_width" "${windows[i]}" \
+                "$name_width" "${names[i]}" "${states[i]}")$'\n'
+        done
 
         pane=$(printf '%s' "$rows" | fzf --prompt="agent: " --delimiter='\t' --with-nth=2.. \
             --preview='tmux capture-pane -p -e -t {1}' --preview-window=down,60% | cut -f1)
