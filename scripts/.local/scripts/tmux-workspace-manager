@@ -26,8 +26,12 @@ extract_wt_positionals() {
     # Sets globals:
     #   ws_positionals      array of positional args (in order)
     #   ws_forwarded_args   array of everything else, including "--" and after
+    #   ws_repo_arg         value of wt's `-C <path>` before "--" (last one
+    #                       wins), empty when absent: a `-C` after "--" belongs
+    #                       to the executed command, not to wt
     ws_positionals=()
     ws_forwarded_args=()
+    ws_repo_arg=""
     local val_flags=("--base" "-b" "--execute" "-x" "--format" "-C" "--config")
     local args=("$@") i=0 n=${#args[@]}
     while [[ $i -lt $n ]]; do
@@ -47,6 +51,7 @@ extract_wt_positionals() {
             i=$((i+1))
             if [[ $i -lt $n ]]; then
                 ws_forwarded_args+=("${args[$i]}")
+                [[ "$arg" == "-C" ]] && ws_repo_arg="${args[$i]}"
                 i=$((i+1))
             fi
             continue
@@ -54,6 +59,10 @@ extract_wt_positionals() {
         # Any other flag (--base=val, --no-cd, -c, -vv, etc.); bare "-" is a
         # branch shortcut and falls through to positional.
         if [[ "$arg" != "-" && "$arg" == -* ]]; then
+            case "$arg" in
+                -C=*) ws_repo_arg="${arg#-C=}" ;;
+                -C?*) ws_repo_arg="${arg#-C}" ;;
+            esac
             ws_forwarded_args+=("$arg")
             i=$((i+1))
             continue
@@ -123,6 +132,51 @@ workspace_branch() {
             return 0
         fi
     done < <(git -C "$src" for-each-ref --format='%(refname:short)' refs/heads/ 2>/dev/null)
+}
+
+repo_common_dir() {
+    # Usage: repo_common_dir <repo path or "">
+    # Absolute path of the repo's shared git dir (<primary clone>/.git), the
+    # identity every worktree of that repo agrees on. Empty outside a repo.
+    local repo="$1"
+    local -a C=()
+    [[ -n "$repo" ]] && C=(-C "$repo")
+    # Strip git's ambient env: GIT_DIR and friends override -C discovery, which
+    # would make every path look like the same repo (ws can run under a git
+    # hook, `git rebase --exec`, `git bisect run`).
+    env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR \
+        git "${C[@]}" rev-parse --path-format=absolute --git-common-dir 2>/dev/null
+}
+
+workspace_worktree_branch() {
+    # Usage: workspace_worktree_branch <repo path or ""> <workspace folder>
+    # Branch checked out in that repo's worktree inside the workspace folder,
+    # whatever it is: branches can be switched inside a worktree and worktrunk
+    # keys the worktree path by branch, so the folder can hold a branch other
+    # than the workspace one. Prints nothing unless that exact path is a live
+    # worktree of this repo with a branch checked out.
+    local repo="$1" folder="$2" common dir branch
+    common=$(repo_common_dir "$repo")
+    [[ -n "$common" ]] || return 0
+    # `{{ repo }}` in worktree-path is the primary clone's directory name.
+    dir="$HOME/dev/.worktrees/$folder/$(basename "$(dirname "$common")")"
+    [[ "$(repo_common_dir "$dir")" == "$common" ]] || return 0
+    branch=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR \
+        git -C "$dir" branch --show-current 2>/dev/null)
+    [[ -n "$branch" ]] || return 0
+    printf '%s\n' "$branch"
+}
+
+resolve_wt_branch() {
+    # Usage: resolve_wt_branch <repo path or ""> <workspace>
+    # The branch to hand wt for <workspace>: the one the workspace folder
+    # already holds, else the workspace token itself. wt resolves a worktree by
+    # branch and refuses when the path it computes is held by another branch,
+    # which is a workspace whose worktree was switched to a second branch (or
+    # whose branch name sanitized to the same folder).
+    local repo="$1" workspace="$2" existing
+    existing=$(workspace_worktree_branch "$repo" "$(workspace_dir "$workspace")")
+    printf '%s\n' "${existing:-$workspace}"
 }
 
 remove_worktree() {
@@ -439,16 +493,18 @@ case "$MODE" in
                     exit 1
                 fi
 
+                split_wt_execute_args "${ws_forwarded_args[@]}"
+                wt_branch=$(resolve_wt_branch "$ws_repo_arg" "$workspace")
+
                 create_flag=()
-                if needs_auto_create "$workspace" "" "${ws_forwarded_args[@]}"; then
+                if needs_auto_create "$wt_branch" "$ws_repo_arg" "${wt_pre_args[@]}"; then
                     create_flag=(--create)
                 fi
 
-                split_wt_execute_args "${ws_forwarded_args[@]}"
                 if [[ "$wt_saw_dashes" == "true" ]]; then
-                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$workspace" -- "${wt_post_args[@]}"
+                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$wt_branch" -- "${wt_post_args[@]}"
                 else
-                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$workspace"
+                    exec wt switch "${create_flag[@]}" "${wt_pre_args[@]}" "$wt_branch"
                 fi
                 ;;
             remove)
@@ -495,16 +551,20 @@ case "$MODE" in
                     fi
                 fi
 
+                split_wt_execute_args "${ws_forwarded_args[@]}"
+                # Only wt's branch argument is substituted — the workspace name
+                # still names the folder and the tmux window below.
+                wt_branch=$(resolve_wt_branch "$repo_path" "$workspace")
+
                 create_flag=()
-                if needs_auto_create "$workspace" "$repo_path" "${ws_forwarded_args[@]}"; then
+                if needs_auto_create "$wt_branch" "$repo_path" "${wt_pre_args[@]}"; then
                     create_flag=(--create)
                 fi
 
-                split_wt_execute_args "${ws_forwarded_args[@]}"
                 if [[ "$wt_saw_dashes" == "true" ]]; then
-                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$workspace" -- "${wt_post_args[@]}"
+                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$wt_branch" -- "${wt_post_args[@]}"
                 else
-                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$workspace"
+                    wt -C "$repo_path" switch "${create_flag[@]}" --no-cd "${wt_pre_args[@]}" "$wt_branch"
                 fi
                 status=$?
                 if [[ $status -eq 0 ]]; then
