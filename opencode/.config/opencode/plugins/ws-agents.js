@@ -1,4 +1,4 @@
-// ws-agents — report opencode's state to the tmux status line.
+// ws-agents — report opencode's state to the agent picker.
 //
 // Claude reports through its own hooks (see claude/.claude/settings.json);
 // opencode has none, so this plugin plays the same role. The event mapping
@@ -6,7 +6,6 @@
 // one file per pane, read back by the ws-agents script.
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -33,11 +32,10 @@ function report(state) {
   reported = state;
   mkdirSync(STATE_DIR, { recursive: true });
   writeFileSync(join(STATE_DIR, pane), `${state}\n`);
-  spawn("tmux", ["refresh-client", "-S"], { stdio: "ignore" }).unref();
 }
 
 export const WsAgentsPlugin = async () => {
-  // No pane means no status line to report to: a headless or remote server.
+  // No pane means no state to report: a headless or remote server.
   if (!pane) return {};
   report("idle");
   return {
